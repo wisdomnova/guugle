@@ -57,7 +57,7 @@ export function ProjectReportModal({ project, isOpen, onClose }: ProjectReportMo
             <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-y-visible">
               
               {/* Left Column: Core Identity (Editorial) */}
-              <div className="w-full lg:w-[45%] p-4 sm:p-6 md:p-10 lg:p-20 space-y-6 sm:space-y-8 md:space-y-12 lg:border-r border-gray-100 flex flex-col justify-start lg:justify-center">
+              <div className="w-full lg:w-[45%] p-4 sm:p-6 md:p-10 lg:p-20 space-y-6 sm:space-y-8 md:space-y-12 lg:border-r border-gray-100 flex flex-col justify-start">
                 <div className="space-y-4 sm:space-y-6 md:space-y-8">
                   <div className="inline-block px-3 py-1 rounded-full bg-gray-900 text-white text-label text-xs md:text-sm">
                     {project.category}
