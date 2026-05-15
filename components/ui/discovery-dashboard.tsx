@@ -139,7 +139,7 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading }: Dis
               <button
                 key={s}
                 onClick={() => setSortBy(s)}
-                className={`px-3 md:px-4 py-1 md:py-1.5 rounded-md text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                className={`px-3 md:px-4 py-1 md:py-1.5 rounded-md text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
                   sortBy === s 
                     ? 'bg-white text-indigo-600 shadow-sm' 
                     : 'text-gray-400 hover:text-gray-600'
@@ -181,7 +181,7 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading }: Dis
           </div>
           <button 
             onClick={() => setSearchQuery('')}
-            className="text-indigo-600 font-bold text-xs uppercase tracking-widest hover:underline"
+            className="text-indigo-600 font-bold text-xs uppercase tracking-widest hover:underline cursor-pointer"
           >
             Clear Search
           </button>
