@@ -1,267 +1,286 @@
-# Guugle Intel — Web3 Early-Stage Project Discovery & Risk Analysis Engine
+# Guugle — Web3 Intelligence Platform
 
-A production-scale platform for detecting emerging crypto projects before they trend publicly and evaluating their legitimacy, sustainability, and rug-pull probability using institutional-grade intelligence scoring.
+**Production-ready** platform for discovering, analyzing, and monitoring early-stage crypto projects with real-time risk scoring from blockchain, social, and development signals.
 
 ## 🚀 Overview
 
-**Guugle Intel** is a sophisticated discovery engine designed for:
-- **Early Detection**: Tracking organic momentum across X, Telegram, Discord, GitHub, and blockchain activity
-- **Risk Scoring**: Institutional-grade rug probability analysis with multi-factor scoring models
-- **Technical Depth**: Analyzing founder history, tokenomics, on-chain signals, and community authenticity
-- **Intelligence-First**: Designed to reduce information asymmetry for sophisticated participants
+Guugle fetches **real data** from multiple sources to provide institutional-grade risk assessment:
+- **🔗 On-Chain Signals**: Smart contract analysis, holder distribution, transaction patterns (Etherscan/Solscan)
+- **🐦 Social Metrics**: Twitter engagement, community size, authenticity (Twitter API v2)
+- **💻 Dev Activity**: Code quality, commit frequency, repository health (GitHub API)
+- **💰 Market Data**: Token price, liquidity, exchange listings (CoinGecko)
+- **📊 Scoring**: Multi-factor algorithm combining all signals into risk scores
+
+## ✅ Production Features
+
+✅ Real data integrations (not mock data)
+✅ Institutional-grade risk scoring algorithm
+✅ Background data sync jobs (automated daily updates)
+✅ REST API for programmatic access
+✅ Admin tools for project management
+✅ Health monitoring and error tracking
+✅ Rate limiting and API compliance
+✅ Supabase PostgreSQL with RLS
+✅ Next.js 16, React 19, TypeScript
 
 ## 🏗️ Architecture
 
 ### Tech Stack
-- **Framework**: Next.js 16 (App Router, Server Components)
-- **Styling**: Tailwind CSS 4.0 + CSS Grid/Flexbox
-- **Animations**: Framer Motion
-- **Icons**: Tabler Icons
-- **Language**: TypeScript
-- **Bundle Tool**: Turbopack
+- **Frontend**: Next.js 16 (App Router), React 19, TypeScript 5
+- **Styling**: Tailwind CSS v4, Framer Motion
+- **Database**: Supabase PostgreSQL with Row-Level Security
+- **APIs**: Etherscan, Twitter v2, GitHub, CoinGecko
+- **Background Jobs**: Node.js (cron-based or queue system)
 
 ### Project Structure
 ```
 guugle/
 ├── app/
-│   ├── page.tsx           # Hero + Intelligence Feed
-│   ├── layout.tsx         # Root layout
-│   └── globals.css        # Design tokens & Tailwind
+│   ├── page.tsx                    # Main dashboard
+│   ├── layout.tsx                  # Root layout
+│   ├── globals.css                 # Design tokens & Tailwind
+│   └── api/
+│       ├── projects/               # CRUD endpoints
+│       ├── search/                 # Full-text search
+│       ├── admin/
+│       │   ├── import-project/     # Manual project import
+│       │   └── sync-data/          # Trigger background jobs
+│       └── health/                 # Monitoring
 ├── components/
 │   ├── ui/
-│   │   └── core.tsx       # Base UI primitives (Card, Badge, Metric)
-│   └── project-card.tsx   # Intelligence report card
+│   │   ├── discovery-dashboard.tsx
+│   │   ├── project-intelligence-card.tsx
+│   │   ├── project-report-modal.tsx
+│   │   └── design-tokens.ts
+│   └── ...
 ├── lib/
-│   ├── engine.ts          # Discovery & scoring logic
-│   ├── types.ts           # TypeScript interfaces
-│   └── utils.ts           # cn() utility
-├── next.config.ts         # Turbopack configuration
-└── tailwind.config.ts     # Design system
+│   ├── integrations/
+│   │   ├── etherscan.ts           # On-chain data
+│   │   ├── twitter.ts             # Social metrics
+│   │   ├── github.ts              # Dev signals
+│   │   └── coingecko.ts           # Market data
+│   ├── scoring.ts                 # Risk scoring algorithm
+│   ├── background-jobs.ts         # Data sync jobs
+│   └── seed.ts                    # Project import/seeding
+└── sql/
+    └── intelligence-schema.sql    # Database schema
 ```
 
-## 🎨 Design System
+## 🧠 Scoring Algorithm
 
-Inspired by **Scientific/Data-Driven** archetype from Claude UI:
+Guugle uses **real data** from multiple sources to calculate risk scores:
 
-### Color Palette
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--color-bg-primary` | `#0c0f14` | Main background |
-| `--color-bg-elevated` | `#141820` | Cards & elevated surfaces |
-| `--color-text-primary` | `#e4e7ec` | Primary text |
-| `--color-text-muted` | `rgba(228, 231, 236, 0.55)` | Secondary text |
-| `--color-accent` | `#22c55e` | Data green (CTAs, positive signals) |
-| `--color-accent-secondary` | `#3b82f6` | Chart blue |
-| `--color-border-dim` | `rgba(255, 255, 255, 0.08)` | Subtle dividers |
+### Rug Risk Score (0-100, higher = riskier)
+- Contract verification status
+- Holder distribution and concentration
+- Transaction patterns
+- Deployer wallet history
+- Lock duration and mechanisms
 
-### Typography
-- **Sans**: Inter (weights: 300, 400, 600, 700)
-- **Mono**: IBM Plex Mono (for data, metrics, labels)
+### Legitimacy Score (0-100)
+- GitHub activity and contributor count (40%)
+- Code quality and test coverage (25%)
+- Twitter verification and engagement (20%)
+- On-chain signals (15%)
 
-## 🧠 Core Components
+### Innovation Score (0-100)
+- Code complexity and uniqueness
+- Development velocity
+- Repository popularity (stars/forks)
 
-### IntelligenceCard
-Displays comprehensive project analysis:
-- Risk score with visual badge
-- Legitimacy, technical, sustainability metrics
-- Positive signals & red flags
-- Assessment summary
-- External links (website, repository)
+### Survival Probability (0-100)
+- Weighted combination of all factors
+- Predicts likelihood of 12+ month survival
 
-### Badge
-Semantic status indicators:
-- `accent` — Featured/priority
-- `risk-low` — Safe projects
-- `risk-high` — High-risk projects
-- `outline` — Filter/category tags
+## 📡 API Endpoints
 
-### Metric
-Data-driven metric display:
-- Label (monospace, small)
-- Value (large, bold)
-- Optional trend indicator
-
-## 🔍 Intelligence Engine
-
-### ProjectReport Interface
-```typescript
-interface ProjectReport {
-  id: string;
-  name: string;
-  category: string;           // AI x Crypto, Infra, DeFi, etc.
-  chain: string;              // Solana, Base, Ethereum, etc.
-  stage: ProjectStage;        // Stealth, Early, Launched, Scaling
-  
-  // Founding & Funding
-  founders: string[];
-  funding: string;
-  investors: string[];
-  
-  // Product & Token
-  productStatus: string;
-  tokenStatus: string;
-  
-  // Community Signals
-  communitySize: string;
-  githubActivity: string;
-  onchainSignals: string[];
-  smartMoneyInterest: string;
-  
-  // Intelligence Output
-  redFlags: string[];
-  positiveSignals: string[];
-  assessment: string;         // Institutional summary
-  
-  // Scoring
-  rugRiskScore: number;       // 0-100
-  survivalProbability: 'Low' | 'Medium' | 'High';
-  confidenceLevel: 'Low' | 'Medium' | 'High';
-  
-  metrics: {
-    legitimacy: number;       // 0-100
-    innovation: number;       // 0-100
-    sustainability: number;   // 0-100
-    community: number;        // 0-100
-    technical: number;        // 0-100
-  };
-}
+### Projects
+```
+GET  /api/projects                 # List all projects (paginated)
+POST /api/projects                 # Create project
+GET  /api/projects/:id             # Get project details
+PATCH /api/projects/:id            # Update scores
+DELETE /api/projects/:id           # Delete project
 ```
 
-### Rug Risk Scoring Model
+### Search & Filter
+```
+GET /api/search?q=uniswap          # Full-text search
+GET /api/projects?category=DeFi&chain=Ethereum&sort=rug-risk
+```
 
-The engine evaluates projects across five dimensions:
+### Admin
+```
+POST /api/admin/import-project     # Import with real data scoring
+POST /api/admin/sync-data          # Trigger background update
+GET /api/health                    # Check system status
+```
 
-1. **Team Analysis** (25%)
-   - Founder verification & doxxing status
-   - GitHub contribution history
-   - Previous project success rate
-   - Public appearances / media
-
-2. **Funding Analysis** (20%)
-   - Reputable VC backing
-   - Strategic vs. pure financial investors
-   - Undisclosed funding red flags
-
-3. **Tokenomics Analysis** (20%)
-   - Insider allocation percentages
-   - Vesting schedules & cliff periods
-   - Liquidity lock duration
-   - Mint privileges & ownership concentration
-
-4. **On-Chain Analysis** (20%)
-   - Deployer wallet history
-   - Wallet clustering patterns
-   - Smart contract privileges
-   - Multisig implementation
-
-5. **Social Analysis** (15%)
-   - Community authenticity
-   - Engagement quality vs. follower count
-   - Founder responsiveness
-   - Discussion technical depth
+**See [API_REFERENCE.md](API_REFERENCE.md) for full documentation**
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### 1. Prerequisites
 - Node.js 18+
-- pnpm
+- npm or pnpm
+- Supabase account (https://supabase.com)
+- API keys for data sources (see PRODUCTION.md)
 
-### Installation
+### 2. Installation
 
 ```bash
-# Install dependencies
-pnpm install
+# Clone and install
+git clone <repo>
+cd guugle
+npm install
 
-# Run development server
-pnpm dev
+# Copy environment template
+cp .env.local.example .env.local
 
-# Build for production
-pnpm build
-
-# Start production server
-pnpm start
+# Edit .env.local with your API keys and Supabase credentials
+# See PRODUCTION.md for detailed setup instructions
 ```
 
-The application runs on `http://localhost:3001` (or available port).
+### 3. Run Locally
 
-## 🔧 Development
+```bash
+# Start dev server
+npm run dev
 
-### Adding New Projects
-
-Edit [lib/engine.ts](lib/engine.ts):
-```typescript
-export async function discoverProjects(query: string = ''): Promise<ProjectReport[]> {
-  return [
-    {
-      id: 'project-id',
-      name: 'Project Name',
-      category: 'Category',
-      // ... full ProjectReport object
-    }
-  ];
-}
+# Open http://localhost:3000
 ```
 
-### Customizing Styling
+### 4. Import First Project
 
-Tailwind tokens defined in [app/globals.css](app/globals.css):
-```css
-@theme {
-  --color-accent: #22c55e;
-  --color-bg-primary: #0c0f14;
-  /* ... */
-}
+```bash
+# Get JOB_SECRET from .env.local
+JOB_SECRET="..."
+
+# Import a real project
+curl -X POST http://localhost:3000/api/admin/import-project \
+  -H "Authorization: Bearer $JOB_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Uniswap",
+    "chain": "Ethereum",
+    "category": "DeFi",
+    "website": "https://uniswap.org",
+    "description": "Decentralized exchange",
+    "contractAddress": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+    "twitterHandle": "Uniswap",
+    "githubRepo": "Uniswap/v3-core",
+    "coingeckoId": "uniswap"
+  }'
+
+# Projects will be scored with real data!
 ```
 
-## 📊 Metrics Interpretation
+### 5. Trigger Data Sync
 
-### Legitimacy Score (0-100)
-- **80+**: Strong founder identity, transparent team, clear roadmap
-- **60-79**: Verified team with some gaps, clear product vision
-- **40-59**: Anonymous or partially doxxed, some transparency concerns
-- **<40**: Serious red flags, opaque operations
+```bash
+# Update all project scores
+curl -X POST http://localhost:3000/api/admin/sync-data \
+  -H "Authorization: Bearer $JOB_SECRET"
+```
+## 📚 Documentation
 
-### Rug Risk Score (0-100)
-- **0-15**: Low risk — Transparent operations, institutional backing
-- **16-40**: Medium risk — Early stage, some concerns but manageable
-- **41-75**: High risk — Significant red flags, high caution advised
-- **76-100**: Critical risk — Likely rug or project failure scenario
+- **[PRODUCTION.md](PRODUCTION.md)** — Complete setup guide for production deployment
+- **[API_REFERENCE.md](API_REFERENCE.md)** — API endpoints, examples, and integration guide
+- **[.env.local.example](.env.local.example)** — Environment variables template
 
-### Survival Probability
-- **High**: Institutional backing, clear product-market fit, strong team
-- **Medium**: Promising but unproven, moderate execution risk
-- **Low**: High failure risk, unclear moat or team capability
+## 🔐 Production Setup Checklist
 
-## 🔐 Security Considerations
+- [ ] Configure all API keys (see PRODUCTION.md)
+- [ ] Set up Supabase project and credentials
+- [ ] Configure environment variables in production
+- [ ] Set up automated data sync cron job
+- [ ] Configure error tracking (Sentry)
+- [ ] Set up email alerts (SendGrid)
+- [ ] Test health endpoint (`/api/health`)
+- [ ] Import test projects with real data
+- [ ] Verify scoring algorithm output
+- [ ] Set up database backups
+- [ ] Configure monitoring dashboard
+- [ ] Deploy to production
 
-- On-chain signals verified against multiple blockchain explorers
-- Wallet clustering analyzed for coordinated behavior
-- Smart contract source code verified on Etherscan/Solscan
-- Team identity cross-referenced with public records
+## 🛠️ Development Commands
 
-## 📡 Future Enhancements
+```bash
+npm run dev              # Start development server
+npm run build            # Build for production
+npm start                # Start production server
+npm run lint             # Run TypeScript check
+npm run type-check       # Type checking
 
-- [ ] Real-time X/Twitter stream integration
-- [ ] GitHub commit analysis & developer velocity scoring
-- [ ] On-chain transaction clustering ML models
-- [ ] Multi-chain smart contract analysis
-- [ ] Community sentiment analysis via Telegram/Discord APIs
-- [ ] VC funding database integration
-- [ ] Hackathon winner tracking
-- [ ] Domain registration age analysis
-- [ ] Historical price correlation analysis
-- [ ] Admin dashboard for project verification
+# Testing APIs locally
+curl http://localhost:3000/api/health
+curl http://localhost:3000/api/projects?limit=5
+curl "http://localhost:3000/api/search?q=defi"
+```
+
+## 📊 Data Flow
+
+```
+Real Data Sources
+  │
+  ├─ Etherscan (On-chain)
+  ├─ Twitter (Social)
+  ├─ GitHub (Development)
+  └─ CoinGecko (Market)
+        │
+        ▼
+Background Job (Daily)
+  • Fetch all data for each project
+  • Run scoring algorithm
+  • Calculate risk metrics
+  • Store in database
+        │
+        ▼
+API Layer
+  • /api/projects (list/search)
+  • /api/admin/* (admin ops)
+  • /api/health (monitoring)
+        │
+        ▼
+Frontend Dashboard
+  • Display projects
+  • Show risk scores
+  • Filter and search
+```
+
+## ⚠️ Rate Limits
+
+**Guugle respects all API rate limits:**
+
+| Source | Limit |
+|--------|-------|
+| Etherscan | 5 calls/sec |
+| Twitter | 300 calls/15 min |
+| GitHub | 5,000 calls/hour |
+| CoinGecko | 10-50 calls/min |
+
+**Solution:** Background jobs process 1 project per second with rate limiting
+
+## 🐛 Troubleshooting
+
+**Problem:** "Unauthorized" on admin endpoints
+- Solution: Check `Authorization: Bearer $JOB_SECRET` header is set
+- Get secret from `.env.local`
+
+**Problem:** Projects not updating
+- Solution: Manually trigger sync:
+  ```bash
+  curl -X POST http://localhost:3000/api/admin/sync-data \
+    -H "Authorization: Bearer $JOB_SECRET"
+  ```
+
+**Problem:** Health check shows services unhealthy
+- Solution: Verify API keys are valid and configured
+- Check Sentry dashboard for errors
+- Review Supabase connection string
+
+**See PRODUCTION.md for more troubleshooting**
 
 ## 📝 License
 
-Proprietary — © 2024 Guugle Intelligence Layer
-
-## 🤝 Contributing
-
-Submit intelligence tips and project discoveries via:
-- X (Twitter): [@guugle_intel](https://twitter.com/guugle_intel)
-- Email: team@guugle.xyz
-
----
-
-**Built with precision for the discerning crypto analyst.** Only facts, no hype.
+MIT

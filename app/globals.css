@@ -1,23 +1,87 @@
 @import "tailwindcss";
 
+/* Design tokens following claude ui standards */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-  --color-bg-primary: #0c0f14;
-  --color-bg-elevated: #141820;
-  --color-bg-card: rgba(255, 255, 255, 0.04);
-  --color-text-primary: #e4e7ec;
-  --color-text-muted: rgba(228, 231, 236, 0.55);
-  --color-border-dim: rgba(255, 255, 255, 0.08);
-  --color-accent: #22c55e;
-  --color-accent-secondary: #3b82f6;
-  --color-accent-tertiary: #a78bfa;
+  /* Global Container */
+  --container-max-w: 1280px;
+
+  /* Light mode palette - high contrast editorial */
+  --color-bg-primary: #ffffff;
+  --color-bg-elevated: #fbfbfc;
+  --color-bg-accent: #f5f6ff;
+  --color-bg-card: #ffffff;
+  --color-text-primary: #0a0a0b;
+  --color-text-secondary: #4a4a4f;
+  --color-text-muted: #8a8a8f;
+  --color-border: #eeeeef;
+  --color-border-subtle: #f7f7f8;
+
+  /* Accent colors */
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-soft: rgba(37, 99, 235, 0.05);
+  --color-accent-secondary: #059669;
+  --color-accent-tertiary: #d97706;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+
+  /* Spacing scale - 8px base */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.5rem;
+  --spacing-6: 2rem;
+  --spacing-8: 3rem;
+  --spacing-10: 4rem;
+  --spacing-12: 5rem;
+  --spacing-16: 8rem;
+
+  /* Typography Scale - fluid clamp */
+  --type-xs:   clamp(0.65rem, 0.6rem + 0.15vw, 0.72rem);
+  --type-sm:   clamp(0.8rem, 0.75rem + 0.2vw, 0.875rem);
+  --type-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --type-lg:   clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem);
+  --type-xl:   clamp(1.563rem, 1.35rem + 1vw, 2.25rem);
+  --type-2xl:  clamp(1.953rem, 1.5rem + 2vw, 3.5rem);
+  --type-3xl:  clamp(2.441rem, 2rem + 3.5vw, 5rem);
+  --type-hero: clamp(3.5rem, 2.5rem + 8vw, 9rem);
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows - precise & soft */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.02);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-lg: 0 12px 24px rgba(0,0,0,0.04);
+  --shadow-xl: 0 24px 48px rgba(0,0,0,0.06);
 }
 
 :root {
-  --background: #0c0f14;
-  --foreground: #e4e7ec;
+  --background: var(--color-bg-primary);
+  --foreground: var(--color-text-primary);
+  
+  /* Precision Easing */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  
+  /* Duration scale */
+  --duration-instant: 100ms;
+  --duration-fast: 200ms;
+  --duration-normal: 350ms;
+  --duration-slow: 500ms;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -26,5 +90,49 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv01" 1, "ss01" 1;
+  letter-spacing: -0.01em;
+}
+
+/* Fluid Typography Helpers */
+.text-label { font-size: var(--type-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+.text-body { font-size: var(--type-base); line-height: 1.6; }
+.text-display { font-size: var(--type-3xl); font-weight: 800; letter-spacing: -0.04em; }
+
+/* Global Layout Utilities */
+.container-app {
+  width: 100%;
+  max-width: var(--container-max-w);
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 5vw, 3rem);
+}
+
+/* Animations respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.text-sm { font-size: 0.875rem; line-height: 1.5rem; }
+.text-base { font-size: 1rem; line-height: 1.5rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+
+.font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.label-sm {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
