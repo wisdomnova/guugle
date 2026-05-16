@@ -11,8 +11,11 @@ import {
   CheckCircle,
   Loader2,
   ArrowRight,
+  RefreshCw,
 } from 'lucide-react';
 import { ProjectIntelligenceCard, ProjectIntelligence } from './project-intelligence-card';
+import { AnalysisBreakdown } from './analysis-breakdown';
+import type { FullAnalysisResult } from '@/lib/analysis';
 import { designTokens } from './design-tokens';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +23,7 @@ interface DiscoveryDashboardProps {
   projects: ProjectIntelligence[];
   onProjectSelect?: (project: ProjectIntelligence) => void;
   isLoading?: boolean;
+  onRefresh?: () => void;
 }
 
 type FilterCategory = 'all' | 'ai-crypto' | 'defi' | 'infra' | 'gaming' | 'wallet' | 'depin';
@@ -34,11 +38,11 @@ const CATEGORIES: { id: FilterCategory; label: string }[] = [
   { id: 'depin', label: 'DePIN' },
 ];
 
-export function DiscoveryDashboard({ projects, onProjectSelect, isLoading }: DiscoveryDashboardProps) {
+export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRefresh }: DiscoveryDashboardProps) {
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('all');
   const [analyzeInput, setAnalyzeInput] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeResult, setAnalyzeResult] = useState<any>(null);
+  const [analyzeResult, setAnalyzeResult] = useState<FullAnalysisResult | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
@@ -48,8 +52,8 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading }: Dis
     setAnalyzeResult(null);
     setAnalyzeError(null);
     try {
-      const url = `/api/analyze?q=${encodeURIComponent(input)}`;
-      const res = await fetch(url);
+      const url = `/api/analyze?q=${encodeURIComponent(input)}&t=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Analysis failed');
       setAnalyzeResult(data);
@@ -60,27 +64,27 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading }: Dis
     }
   };
 
-  const buildProjectFromResult = (r: any): ProjectIntelligence => ({
+  const buildProjectFromResult = (r: FullAnalysisResult): ProjectIntelligence => ({
     id: r.contractAddress ?? r.name ?? 'analyzed',
     name: r.name,
-    category: r.category ?? 'Unknown',
+    category: 'Analyzed',
     chain: r.chain,
-    stage: r.stage ?? 'alpha',
-    website: r.website ?? undefined,
+    stage: 'launched',
+    website: r.intelligence.token?.website || undefined,
     founders: [],
     productStatus: 'launched',
     tokenStatus: r.contractAddress ? 'public' : 'planned',
-    communitySize: 0,
-    githubActivity: 0,
-    liquiditySignals: 0,
+    communitySize: r.intelligence.github?.metrics.starCount ?? 0,
+    githubActivity: r.scores.githubActivity,
+    liquiditySignals: Math.round(r.intelligence.market?.volume24h ?? 0),
     rugRiskScore: r.scores.rugRiskScore,
     legitimacyScore: r.scores.legitimacyScore,
     innovationScore: r.scores.innovationScore,
     survivalProbability:
       r.scores.survivalProbability > 65 ? 'high' : r.scores.survivalProbability > 40 ? 'medium' : 'low',
-    redFlags: (r.redFlags ?? []).map((f: any) => f.flag),
-    positiveSignals: (r.positiveSignals ?? []).map((s: any) => s.signal),
-    lastUpdated: new Date().toISOString(),
+    redFlags: r.redFlags.map((f) => f.flag),
+    positiveSignals: r.positiveSignals.map((s) => s.signal),
+    lastUpdated: r.analyzedAt,
   });
 
   const filteredProjects = useMemo(() => {
@@ -196,7 +200,7 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading }: Dis
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   {
-                    label: 'Rug Risk',
+                    label: 'Rug risk',
                     value: analyzeResult.scores.rugRiskScore,
                     color:
                       analyzeResult.scores.rugRiskScore > 60
@@ -237,30 +241,8 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading }: Dis
                   </div>
                 ))}
               </div>
-              {analyzeResult.redFlags?.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-label text-[var(--color-danger)]">Red Flags</span>
-                  <div className="flex flex-wrap gap-2">
-                    {analyzeResult.redFlags.slice(0, 4).map((f: any, i: number) => (
-                      <span key={i} className="chip-danger">
-                        {f.flag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {analyzeResult.positiveSignals?.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-label text-[var(--color-success)]">Positive Signals</span>
-                  <div className="flex flex-wrap gap-2">
-                    {analyzeResult.positiveSignals.slice(0, 4).map((s: any, i: number) => (
-                      <span key={i} className="chip-success">
-                        {s.signal}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <AnalysisBreakdown result={analyzeResult} />
+
               <button
                 onClick={() => onProjectSelect?.(buildProjectFromResult(analyzeResult))}
                 className="btn-primary w-full"
@@ -291,9 +273,23 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading }: Dis
             activity.
           </p>
         </div>
+        <div className="flex items-center gap-3">
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isLoading}
+              className="btn-ghost text-xs shrink-0"
+              title="Pull latest scores from database"
+            >
+              <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          )}
+        </div>
         <div className="flex gap-8 md:pl-8 md:border-l border-[var(--color-border)]">
           <div className="space-y-1">
-            <span className="text-label">Avg Risk</span>
+            <span className="text-label">Avg rug risk</span>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl md:text-3xl stat-value">{avgRugRisk}</span>
               <span className="text-xs font-mono text-[var(--color-text-muted)]">/100</span>

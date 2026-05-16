@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { scoreProject, type ScoringInputs } from './scoring';
+import { runFullAnalysis } from './analysis';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -118,14 +118,13 @@ async function importProject(projectData: ProjectImportData) {
 
     // Score the project using real API data
     console.log(`📊 Scoring ${projectData.name}...`);
-    const scoringInputs: ScoringInputs = {
+    const analysis = await runFullAnalysis({
+      name: projectData.name,
       contractAddress: projectData.contractAddress,
       coingeckoId: projectData.coingeckoId,
       chain: projectData.chain,
-      projectStage: 'early', // Can be updated by user
-    };
-
-    const scores = await scoreProject(projectData.name, scoringInputs);
+      projectStage: 'mature',
+    });
 
     // Insert project
     const { data: insertedProjects, error: projectError } = await (
@@ -134,20 +133,25 @@ async function importProject(projectData: ProjectImportData) {
       name: projectData.name,
       category: projectData.category,
       chain: projectData.chain,
-      stage: 'early',
+      stage: 'launched',
       website: projectData.website || null,
       description: projectData.description,
       contract_address: projectData.contractAddress || null,
       coingecko_id: projectData.coingeckoId || null,
       product_status: 'live',
       token_status: 'launched',
-      community_size: 0,
-      github_activity: 0,
-      liquidity_signals: 0,
-      rug_risk_score: scores.rugRiskScore,
-      legitimacy_score: scores.legitimacyScore,
-      innovation_score: scores.innovationScore,
-      survival_probability: scores.survivalProbability,
+      community_size: analysis.intelligence.github?.metrics.starCount ?? 0,
+      github_activity: analysis.scores.githubActivity,
+      liquidity_signals: Math.round(analysis.intelligence.market?.volume24h ?? 0),
+      rug_risk_score: analysis.scores.rugRiskScore,
+      legitimacy_score: analysis.scores.legitimacyScore,
+      innovation_score: analysis.scores.innovationScore,
+      survival_probability:
+        analysis.scores.survivalProbability > 65
+          ? 'high'
+          : analysis.scores.survivalProbability > 40
+            ? 'medium'
+            : 'low',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).select();
@@ -158,8 +162,8 @@ async function importProject(projectData: ProjectImportData) {
     console.log(`✅ Imported "${projectData.name}"`);
 
     // Insert red flags
-    if (scores.redFlags.length > 0) {
-      const redFlagsData = scores.redFlags.map((flag) => ({
+    if (analysis.redFlags.length > 0) {
+      const redFlagsData = analysis.redFlags.map((flag) => ({
         project_id: projectId,
         flag: flag.flag,
         severity: flag.severity,
@@ -174,8 +178,8 @@ async function importProject(projectData: ProjectImportData) {
     }
 
     // Insert positive signals
-    if (scores.positiveSignals.length > 0) {
-      const signalsData = scores.positiveSignals.map((signal) => ({
+    if (analysis.positiveSignals.length > 0) {
+      const signalsData = analysis.positiveSignals.map((signal) => ({
         project_id: projectId,
         signal: signal.signal,
         strength: signal.strength,
@@ -193,10 +197,10 @@ async function importProject(projectData: ProjectImportData) {
     await (supabase.from('intelligence_reports') as any).insert({
       project_id: projectId,
       report_date: new Date().toISOString(),
-      rug_risk_score: scores.rugRiskScore,
-      legitimacy_score: scores.legitimacyScore,
-      innovation_score: scores.innovationScore,
-      analyst_notes: 'Initial import with real data scoring',
+      rug_risk_score: analysis.scores.rugRiskScore,
+      legitimacy_score: analysis.scores.legitimacyScore,
+      innovation_score: analysis.scores.innovationScore,
+      analyst_notes: 'Initial import with live market, on-chain, and GitHub scoring',
     });
   } catch (error) {
     console.error(`❌ Error importing ${projectData.name}:`, error);

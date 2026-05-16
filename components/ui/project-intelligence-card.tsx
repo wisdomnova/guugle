@@ -74,8 +74,8 @@ export function ProjectIntelligenceCard({ project, onClick }: ProjectCardProps) 
           </div>
 
           <div className="text-right flex-shrink-0">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] mb-1">
-              Risk
+            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] mb-1" title="0 = low rug risk">
+              Rug risk
             </div>
             <div
               className="font-mono font-bold leading-none tabular-nums"

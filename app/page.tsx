@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AppShell } from '@/components/ui/app-shell';
 import { DiscoveryDashboard } from '@/components/ui/discovery-dashboard';
 import { ProjectReportModal } from '@/components/ui/project-report-modal';
@@ -13,24 +13,25 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch('/api/projects');
-        if (!response.ok) throw new Error('Failed to fetch projects');
-        const data = await response.json();
-        setProjects(data.projects);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchProjects();
+  const fetchProjects = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch(`/api/projects?t=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Failed to fetch projects');
+      const data = await response.json();
+      setProjects(data.projects);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   return (
     <AppShell>
@@ -38,6 +39,7 @@ export default function Home() {
         projects={projects}
         onProjectSelect={setSelectedProject}
         isLoading={isLoading}
+        onRefresh={fetchProjects}
       />
       <ProjectReportModal
         project={selectedProject}

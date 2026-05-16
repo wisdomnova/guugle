@@ -4,7 +4,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { scoreProject, type ScoringInputs } from './scoring';
+import { gatherProjectIntelligence } from './analysis';
+import { scoreProject, scoreFromGathered, type ScoringInputs } from './scoring';
+import { getTokenInfo } from './integrations/coingecko';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -48,10 +50,27 @@ async function getProjectsToScore(): Promise<ProjectToScore[]> {
 async function updateProjectScores(
   projectId: string,
   projectName: string,
-  scoringInputs: ScoringInputs
+  scoringInputs: ScoringInputs & { githubRepo?: string }
 ): Promise<boolean> {
   try {
-    const scores = await scoreProject(projectName, scoringInputs);
+    let githubRepo = scoringInputs.githubRepo;
+    if (!githubRepo && scoringInputs.coingeckoId) {
+      const info = await getTokenInfo(scoringInputs.coingeckoId);
+      if (info.github) githubRepo = info.github;
+    }
+
+    const intelligence = await gatherProjectIntelligence({
+      name: projectName,
+      contractAddress: scoringInputs.contractAddress,
+      coingeckoId: scoringInputs.coingeckoId,
+      chain: scoringInputs.chain,
+      githubRepo,
+    });
+
+    const scores = scoreFromGathered(projectName, { ...scoringInputs, githubRepo }, intelligence);
+
+    const githubActivity = intelligence.github?.activityScore ?? 0;
+    const communitySize = intelligence.github?.metrics.starCount ?? 0;
 
     // Update main project table
     const { error: updateError } = await (supabase.from('projects') as any)
@@ -59,7 +78,10 @@ async function updateProjectScores(
         rug_risk_score: scores.rugRiskScore,
         legitimacy_score: scores.legitimacyScore,
         innovation_score: scores.innovationScore,
-        survival_probability: scores.survivalProbability,
+        survival_probability:
+          scores.survivalProbability > 65 ? 'high' : scores.survivalProbability > 40 ? 'medium' : 'low',
+        github_activity: githubActivity,
+        community_size: communitySize,
         updated_at: new Date().toISOString(),
       })
       .eq('id', projectId);
