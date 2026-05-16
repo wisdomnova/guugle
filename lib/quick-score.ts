@@ -1,6 +1,6 @@
 import { gatherProjectIntelligence } from './analysis';
 import { scoreFromGathered, type ScoringInputs } from './scoring';
-import { applyAddressVariance } from './address-entropy';
+import { applyAddressVariance, clampRugRisk } from './address-entropy';
 
 export interface QuickScoreResult {
   rugRiskScore: number;
@@ -64,6 +64,7 @@ export async function quickScoreProject(params: {
 
     return {
       ...varied,
+      rugRiskScore: clampRugRisk(varied.rugRiskScore),
       liquiditySignals: Math.round(
         intelligence.market?.volume24h ?? intelligence.dex?.volume24h ?? 0
       ),
@@ -81,6 +82,11 @@ export async function quickScoreProject(params: {
       },
       key
     );
-    return { ...varied, liquiditySignals: 0, scoredAt: new Date().toISOString() };
+    return {
+      ...varied,
+      rugRiskScore: clampRugRisk(varied.rugRiskScore),
+      liquiditySignals: 0,
+      scoredAt: new Date().toISOString(),
+    };
   }
 }

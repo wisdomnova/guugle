@@ -12,7 +12,7 @@ import {
   githubActivityScore,
 } from './integrations/github';
 import type { OnChainSnapshot, MarketSnapshot, GitHubSnapshot, DexSnapshot } from './analysis';
-import { applyAddressVariance } from './address-entropy';
+import { applyAddressVariance, clampRugRisk } from './address-entropy';
 
 export interface ScoringInputs {
   contractAddress?: string;
@@ -166,7 +166,7 @@ function calculateRugRiskScore(
   if (liquidity > 5_000_000) riskScore = Math.max(0, riskScore - 15);
   else if (liquidity > 1_000_000) riskScore = Math.max(0, riskScore - 8);
 
-  return { score: Math.min(100, Math.max(0, riskScore)), flags };
+  return { score: clampRugRisk(riskScore), flags };
 }
 
 function calculateLegitimacyScore(
@@ -340,7 +340,7 @@ export function scoreFromGathered(
   );
 
   return {
-    rugRiskScore: varied.rugRiskScore,
+    rugRiskScore: clampRugRisk(varied.rugRiskScore),
     legitimacyScore: varied.legitimacyScore,
     innovationScore: varied.innovationScore,
     survivalProbability: varied.survivalProbability,
@@ -421,7 +421,7 @@ export async function scoreProject(projectName: string, inputs: ScoringInputs): 
       key
     );
     return {
-      rugRiskScore: varied.rugRiskScore,
+      rugRiskScore: clampRugRisk(varied.rugRiskScore),
       legitimacyScore: varied.legitimacyScore,
       innovationScore: varied.innovationScore,
       survivalProbability: varied.survivalProbability,

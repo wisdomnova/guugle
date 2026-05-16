@@ -254,7 +254,7 @@ export async function POST(request: Request) {
         token_status: body.tokenStatus,
         community_size: body.communitySize || 0,
         github_activity: body.githubActivity || 0,
-        rug_risk_score: body.rugRiskScore || 0,
+        rug_risk_score: Math.max(1, body.rugRiskScore ?? 1),
         legitimacy_score: body.legitimacyScore || 0,
         innovation_score: body.innovationScore || 0,
         survival_probability: body.survivalProbability || 'medium',

@@ -38,8 +38,14 @@ export function deriveAddressVariance(addressOrId: string): AddressVariance {
   };
 }
 
+export const MIN_RUG_RISK_SCORE = 1;
+
 export function clampScore(n: number, min = 0, max = 100): number {
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+export function clampRugRisk(n: number): number {
+  return clampScore(n, MIN_RUG_RISK_SCORE, 100);
 }
 
 export function applyAddressVariance(
@@ -56,7 +62,7 @@ export function applyAddressVariance(
   const v = deriveAddressVariance(addressOrId);
 
   return {
-    rugRiskScore: clampScore(scores.rugRiskScore + v.rugDelta),
+    rugRiskScore: clampRugRisk(scores.rugRiskScore + v.rugDelta),
     legitimacyScore: clampScore(scores.legitimacyScore + v.legitDelta),
     innovationScore: clampScore(scores.innovationScore + v.innovDelta),
     survivalProbability: clampScore(scores.survivalProbability + v.survivalDelta),
