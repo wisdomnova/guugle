@@ -1,14 +1,15 @@
 /**
- * Full project intelligence gather — feeds scoring + rich analyze UI
+ * Full project intelligence gather — per-contract data from multiple sources
  */
 
-import { analyzeOnChainMetrics, getContractInfo } from './integrations/etherscan';
+import { analyzeOnChainMetrics } from './integrations/etherscan';
 import {
   getMarketData,
   getTokenInfo,
   checkExchangeListing,
-  type MarketMetrics,
+  resolveCoinByContract,
 } from './integrations/coingecko';
+import { getDexMetricsByToken, type DexPairMetrics } from './integrations/dexscreener';
 import {
   getGitHubMetrics,
   analyzeCodeQuality,
@@ -20,12 +21,13 @@ import {
 import { scoreFromGathered, type ScoringInputs, type ScoringResults } from './scoring';
 
 export interface OnChainSnapshot {
-  uniqueHolders: number;
+  uniqueHolders: number | null;
   transactionCount: number;
   isVerified: boolean;
   deployDate: string | null;
   deployerWallet: string | null;
   contractAddress: string | null;
+  holderCountAvailable: boolean;
 }
 
 export interface MarketSnapshot {
@@ -33,8 +35,22 @@ export interface MarketSnapshot {
   marketCap: number;
   volume24h: number;
   priceChange24h: number;
+  liquidityUsd: number;
   listedExchanges: number;
   cexNames: string[];
+}
+
+export interface DexSnapshot {
+  liquidityUsd: number;
+  volume24h: number;
+  marketCap: number;
+  priceUsd: number;
+  priceChange24h: number;
+  pairAgeDays: number;
+  buys24h: number;
+  sells24h: number;
+  txns24h: number;
+  dexId: string;
 }
 
 export interface GitHubSnapshot {
@@ -48,6 +64,7 @@ export interface GitHubSnapshot {
 export interface ProjectIntelligencePayload {
   market: MarketSnapshot | null;
   onChain: OnChainSnapshot | null;
+  dex: DexSnapshot | null;
   github: GitHubSnapshot | null;
   token: {
     name: string;
@@ -78,6 +95,39 @@ export interface FullAnalysisResult {
   analyzedAt: string;
 }
 
+function dexToSnapshot(d: DexPairMetrics): DexSnapshot {
+  return {
+    liquidityUsd: d.liquidityUsd,
+    volume24h: d.volume24h,
+    marketCap: d.marketCap,
+    priceUsd: d.priceUsd,
+    priceChange24h: d.priceChange24h,
+    pairAgeDays: d.pairAgeDays,
+    buys24h: d.buys24h,
+    sells24h: d.sells24h,
+    txns24h: d.txns24h,
+    dexId: d.dexId,
+  };
+}
+
+function mergeMarket(
+  cg: Awaited<ReturnType<typeof getMarketData>>,
+  dex: DexPairMetrics | null,
+  exchanges: { exchanges: string[] } | null
+): MarketSnapshot | null {
+  if (!cg && !dex) return null;
+
+  return {
+    tokenPrice: cg?.tokenPrice || dex?.priceUsd || 0,
+    marketCap: Math.max(cg?.marketCap ?? 0, dex?.marketCap ?? 0),
+    volume24h: Math.max(cg?.volume24h ?? 0, dex?.volume24h ?? 0),
+    priceChange24h: cg?.priceChange24h ?? dex?.priceChange24h ?? 0,
+    liquidityUsd: dex?.liquidityUsd ?? cg?.liquidityUsd ?? 0,
+    listedExchanges: exchanges?.exchanges.length ?? 0,
+    cexNames: exchanges?.exchanges ?? [],
+  };
+}
+
 export async function gatherProjectIntelligence(inputs: {
   name: string;
   contractAddress?: string;
@@ -88,55 +138,56 @@ export async function gatherProjectIntelligence(inputs: {
   const sourcesUsed: string[] = [];
   const sourcesMissing: string[] = [];
 
-  const [onChainRaw, contractInfo, marketRaw, tokenInfo, exchanges] = await Promise.all([
+  let coingeckoId = inputs.coingeckoId;
+  let githubRepo = inputs.githubRepo;
+
+  if (inputs.contractAddress && !coingeckoId) {
+    const resolved = await resolveCoinByContract(inputs.contractAddress);
+    if (resolved) {
+      coingeckoId = resolved.id;
+      if (!githubRepo && resolved.github) githubRepo = resolved.github;
+    }
+  }
+
+  const [onChainRaw, dexRaw, marketRaw, tokenInfo, exchanges] = await Promise.all([
     inputs.contractAddress ? analyzeOnChainMetrics(inputs.contractAddress) : Promise.resolve(null),
-    inputs.contractAddress ? getContractInfo(inputs.contractAddress) : Promise.resolve(null),
-    inputs.coingeckoId ? getMarketData(inputs.coingeckoId) : Promise.resolve(null),
-    inputs.coingeckoId ? getTokenInfo(inputs.coingeckoId) : Promise.resolve(null),
-    inputs.coingeckoId ? checkExchangeListing(inputs.coingeckoId) : Promise.resolve(null),
+    inputs.contractAddress ? getDexMetricsByToken(inputs.contractAddress) : Promise.resolve(null),
+    coingeckoId ? getMarketData(coingeckoId) : Promise.resolve(null),
+    coingeckoId ? getTokenInfo(coingeckoId) : Promise.resolve(null),
+    coingeckoId ? checkExchangeListing(coingeckoId) : Promise.resolve(null),
   ]);
 
-  let market: MarketSnapshot | null = null;
-  if (marketRaw) {
-    sourcesUsed.push('CoinGecko');
-    market = {
-      tokenPrice: marketRaw.tokenPrice,
-      marketCap: marketRaw.marketCap,
-      volume24h: marketRaw.volume24h,
-      priceChange24h: marketRaw.priceChange24h,
-      listedExchanges: exchanges?.exchanges.length ?? 0,
-      cexNames: exchanges?.exchanges ?? [],
-    };
-  } else if (inputs.coingeckoId) {
-    sourcesMissing.push('CoinGecko market data');
+  const dex = dexRaw ? dexToSnapshot(dexRaw) : null;
+  if (dex) sourcesUsed.push('DexScreener');
+  else if (inputs.contractAddress) sourcesMissing.push('DexScreener (no active pairs)');
+
+  const market = mergeMarket(marketRaw, dexRaw, exchanges);
+  if (marketRaw || dexRaw) {
+    if (marketRaw) sourcesUsed.push('CoinGecko');
+    else if (coingeckoId) sourcesMissing.push('CoinGecko market data');
   }
 
   let onChain: OnChainSnapshot | null = null;
   if (onChainRaw && inputs.contractAddress) {
     sourcesUsed.push('Etherscan');
-    const verified = Boolean(
-      (onChainRaw as { isVerified?: boolean }).isVerified ?? contractInfo?.isVerified
-    );
     onChain = {
-      uniqueHolders: onChainRaw.uniqueHolders ?? 0,
-      transactionCount: onChainRaw.transactionCount ?? 0,
-      isVerified: verified,
-      deployDate: contractInfo?.deployDate?.toISOString() ?? null,
-      deployerWallet: contractInfo?.deployerWallet ?? null,
+      uniqueHolders: onChainRaw.uniqueHolders,
+      transactionCount: onChainRaw.transactionCount,
+      isVerified: onChainRaw.isVerified,
+      deployDate: onChainRaw.deployDate,
+      deployerWallet: onChainRaw.deployerWallet,
       contractAddress: inputs.contractAddress,
+      holderCountAvailable: onChainRaw.holderCountAvailable,
     };
   } else if (inputs.contractAddress) {
-    sourcesMissing.push('Etherscan on-chain data');
+    sourcesMissing.push('Etherscan contract data');
   }
 
   let github: GitHubSnapshot | null = null;
-  const repoSlug =
-    inputs.githubRepo ||
-    (tokenInfo?.github ? parseGitHubRepo(tokenInfo.github) : null);
+  const repoSlug = githubRepo || (tokenInfo?.github ? tokenInfo.github : null);
 
   if (repoSlug) {
-    const parsed =
-      typeof repoSlug === 'string' ? parseGitHubRepo(repoSlug) : repoSlug;
+    const parsed = parseGitHubRepo(repoSlug);
     if (parsed) {
       const [metrics, codeQuality] = await Promise.all([
         getGitHubMetrics(parsed.owner, parsed.repo),
@@ -173,7 +224,7 @@ export async function gatherProjectIntelligence(inputs: {
 
   if (token) sourcesUsed.push('CoinGecko metadata');
 
-  return { market, onChain, github, token, sourcesUsed, sourcesMissing };
+  return { market, onChain, dex, github, token, sourcesUsed, sourcesMissing };
 }
 
 export async function runFullAnalysis(params: {
@@ -186,19 +237,22 @@ export async function runFullAnalysis(params: {
 }): Promise<FullAnalysisResult> {
   const intelligence = await gatherProjectIntelligence(params);
 
-  const scoringInputs: ScoringInputs = {
-    contractAddress: params.contractAddress,
-    coingeckoId: params.coingeckoId,
-    chain: params.chain,
-    projectStage: params.projectStage ?? 'early',
-    githubRepo: intelligence.github?.repo,
-  };
-
-  const scores = scoreFromGathered(params.name, scoringInputs, {
-    onChain: intelligence.onChain,
-    market: intelligence.market,
-    github: intelligence.github,
-  });
+  const scores = scoreFromGathered(
+    params.name,
+    {
+      contractAddress: params.contractAddress,
+      coingeckoId: params.coingeckoId,
+      chain: params.chain,
+      projectStage: params.projectStage ?? 'early',
+      githubRepo: intelligence.github?.repo,
+    },
+    {
+      onChain: intelligence.onChain,
+      market: intelligence.market,
+      dex: intelligence.dex,
+      github: intelligence.github,
+    }
+  );
 
   return {
     name: params.name,
@@ -220,6 +274,7 @@ export async function runFullAnalysis(params: {
 }
 
 export function formatUsd(n: number): string {
+  if (!n || n <= 0) return '—';
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;

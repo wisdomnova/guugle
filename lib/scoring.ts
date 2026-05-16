@@ -1,17 +1,17 @@
 /**
- * Risk scoring — Etherscan + CoinGecko + GitHub
+ * Risk scoring — differentiated per contract via DexScreener + Etherscan V2 + CoinGecko
  */
 
 import { analyzeOnChainMetrics } from './integrations/etherscan';
-import { getMarketData, checkExchangeListing } from './integrations/coingecko';
+import { getMarketData, checkExchangeListing, resolveCoinByContract } from './integrations/coingecko';
+import { getDexMetricsByToken } from './integrations/dexscreener';
 import {
   getGitHubMetrics,
   analyzeCodeQuality,
   parseGitHubRepo,
-  type GitHubMetrics,
-  type CodeQualitySignals,
+  githubActivityScore,
 } from './integrations/github';
-import type { OnChainSnapshot, MarketSnapshot, GitHubSnapshot } from './analysis';
+import type { OnChainSnapshot, MarketSnapshot, GitHubSnapshot, DexSnapshot } from './analysis';
 
 export interface ScoringInputs {
   contractAddress?: string;
@@ -41,219 +41,258 @@ export interface ScoringResults {
 export interface GatheredScoreData {
   onChain: OnChainSnapshot | null;
   market: MarketSnapshot | null;
+  dex: DexSnapshot | null;
   github: GitHubSnapshot | null;
 }
 
 function calculateRugRiskScore(
-  onChainData: OnChainSnapshot | Record<string, unknown> | null,
-  marketData: MarketSnapshot | Record<string, unknown> | null
+  onChain: OnChainSnapshot | null,
+  market: MarketSnapshot | null,
+  dex: DexSnapshot | null
 ): { score: number; flags: ScoringResults['redFlags'] } {
   let riskScore = 0;
   const flags: ScoringResults['redFlags'] = [];
 
-  if (!onChainData) {
+  const marketCap = Math.max(market?.marketCap ?? 0, dex?.marketCap ?? 0);
+  const liquidity = dex?.liquidityUsd ?? market?.liquidityUsd ?? 0;
+  const holders = onChain?.uniqueHolders;
+  const holderKnown = onChain?.holderCountAvailable && holders !== null;
+
+  if (!onChain && !dex) {
     return {
-      score: 50,
-      flags: [{ flag: 'No on-chain data', severity: 'high', evidence: 'Contract not verified or unavailable' }],
+      score: 72,
+      flags: [{ flag: 'No live data', severity: 'high', evidence: 'Could not reach on-chain or DEX APIs' }],
     };
   }
 
-  const uniqueHolders = Number((onChainData as OnChainSnapshot).uniqueHolders) || 0;
-  const marketCap = Number((marketData as MarketSnapshot)?.marketCap) || 0;
-  const hasMarketCap = marketCap > 500_000;
-
-  if (uniqueHolders < 50 && !hasMarketCap) {
-    riskScore += 35;
-    flags.push({
-      flag: 'Low holder count',
-      severity: 'critical',
-      evidence: `Only ${uniqueHolders} unique holders detected`,
-    });
-  } else if (uniqueHolders > 0 && uniqueHolders < 500 && !hasMarketCap) {
-    riskScore += 15;
-    flags.push({
-      flag: 'Concentrated holders',
-      severity: 'high',
-      evidence: `${uniqueHolders} holders suggests concentration risk`,
-    });
-  } else if (uniqueHolders === 0 && !hasMarketCap) {
-    riskScore += 20;
-    flags.push({ flag: 'No holder data', severity: 'medium', evidence: 'Unable to verify holder distribution' });
-  }
-
-  const largeTransactions = Number((onChainData as { largeTransactions?: number }).largeTransactions) || 0;
-  const totalTransactions = Number((onChainData as OnChainSnapshot).transactionCount) || 1;
-  const largeTransactionRatio = largeTransactions / Math.max(totalTransactions, 1);
-
-  if (largeTransactionRatio > 0.5) {
-    riskScore += 25;
-    flags.push({
-      flag: 'Abnormal transaction pattern',
-      severity: 'high',
-      evidence: `${(largeTransactionRatio * 100).toFixed(1)}% of transactions are large`,
-    });
-  }
-
-  const deployDateStr = (onChainData as OnChainSnapshot).deployDate;
-  if (deployDateStr) {
-    const ageHours = (Date.now() - new Date(deployDateStr).getTime()) / (1000 * 60 * 60);
-    if (ageHours < 24) {
-      riskScore += 30;
-      flags.push({ flag: 'Very new contract', severity: 'critical', evidence: 'Deployed less than 24 hours ago' });
-    } else if (ageHours < 7 * 24) {
-      riskScore += 15;
+  if (dex) {
+    if (dex.pairAgeDays < 1) {
+      riskScore += 35;
+      flags.push({ flag: 'Brand new pair', severity: 'critical', evidence: 'DEX pair created under 24h ago' });
+    } else if (dex.pairAgeDays < 7) {
+      riskScore += 22;
       flags.push({
-        flag: 'Recent deployment',
+        flag: 'Very young liquidity',
         severity: 'high',
-        evidence: `Deployed ${Math.floor(ageHours / 24)} days ago`,
+        evidence: `Primary pair is only ${Math.floor(dex.pairAgeDays)} days old`,
       });
+    } else if (dex.pairAgeDays < 30) {
+      riskScore += 10;
+    }
+
+    if (liquidity < 5_000) {
+      riskScore += 35;
+      flags.push({
+        flag: 'Minimal liquidity',
+        severity: 'critical',
+        evidence: `Only $${liquidity.toLocaleString()} DEX liquidity`,
+      });
+    } else if (liquidity < 50_000) {
+      riskScore += 22;
+      flags.push({
+        flag: 'Thin liquidity',
+        severity: 'high',
+        evidence: `$${liquidity.toLocaleString()} DEX liquidity`,
+      });
+    } else if (liquidity < 250_000) {
+      riskScore += 10;
+    }
+
+    if (dex.sells24h > 0 && dex.buys24h > 0 && dex.sells24h > dex.buys24h * 2) {
+      riskScore += 12;
+      flags.push({
+        flag: 'Sell pressure',
+        severity: 'medium',
+        evidence: `${dex.sells24h} sells vs ${dex.buys24h} buys (24h)`,
+      });
+    }
+
+    if (dex.txns24h < 5 && liquidity < 100_000) {
+      riskScore += 8;
+      flags.push({ flag: 'Low trading activity', severity: 'medium', evidence: `${dex.txns24h} txs in 24h` });
+    }
+  } else if (onChain?.contractAddress) {
+    riskScore += 28;
+    flags.push({ flag: 'No DEX liquidity found', severity: 'high', evidence: 'No active trading pair on DexScreener' });
+  }
+
+  if (onChain) {
+    if (holderKnown && holders! < 50 && marketCap < 500_000) {
+      riskScore += 30;
+      flags.push({
+        flag: 'Low holder count',
+        severity: 'critical',
+        evidence: `Only ${holders} unique holders`,
+      });
+    } else if (holderKnown && holders! < 500 && marketCap < 5_000_000) {
+      riskScore += 12;
+      flags.push({
+        flag: 'Concentrated holders',
+        severity: 'high',
+        evidence: `${holders} on-chain holders`,
+      });
+    }
+
+    if (!onChain.isVerified) {
+      riskScore += 18;
+      flags.push({
+        flag: 'Unverified contract',
+        severity: 'high',
+        evidence: 'Source code not verified on Etherscan',
+      });
+    }
+
+    if (onChain.deployDate) {
+      const ageHours = (Date.now() - new Date(onChain.deployDate).getTime()) / (1000 * 60 * 60);
+      if (ageHours < 48) {
+        riskScore += 25;
+        flags.push({ flag: 'New contract deploy', severity: 'critical', evidence: 'Deployed within 48 hours' });
+      } else if (ageHours < 7 * 24) {
+        riskScore += 12;
+        flags.push({
+          flag: 'Recent contract',
+          severity: 'high',
+          evidence: `Contract deployed ${Math.floor(ageHours / 24)} days ago`,
+        });
+      }
     }
   }
 
-  if (!(onChainData as OnChainSnapshot).isVerified) {
-    riskScore += 20;
-    flags.push({
-      flag: 'Unverified contract',
-      severity: 'high',
-      evidence: 'Contract source code is not publicly verified',
-    });
-  }
+  if (marketCap > 1e9) riskScore = Math.max(0, riskScore - 28);
+  else if (marketCap > 1e8) riskScore = Math.max(0, riskScore - 18);
+  else if (marketCap > 1e7) riskScore = Math.max(0, riskScore - 8);
 
-  if (marketCap > 0) {
-    if (marketCap > 1e9) riskScore = Math.max(0, riskScore - 30);
-    else if (marketCap > 1e8) riskScore = Math.max(0, riskScore - 20);
-    else if (marketCap > 1e7) riskScore = Math.max(0, riskScore - 10);
-  }
+  if (liquidity > 5_000_000) riskScore = Math.max(0, riskScore - 15);
+  else if (liquidity > 1_000_000) riskScore = Math.max(0, riskScore - 8);
 
   return { score: Math.min(100, Math.max(0, riskScore)), flags };
 }
 
 function calculateLegitimacyScore(
-  onChainData: OnChainSnapshot | null,
-  marketData: MarketSnapshot | null,
+  onChain: OnChainSnapshot | null,
+  market: MarketSnapshot | null,
+  dex: DexSnapshot | null,
   github: GitHubSnapshot | null
 ): { score: number; signals: ScoringResults['positiveSignals'] } {
-  let score = 50;
+  let score = 28;
   const signals: ScoringResults['positiveSignals'] = [];
 
-  if (onChainData) {
-    if (onChainData.uniqueHolders > 1000) {
-      score += 25;
-      signals.push({
-        signal: 'Wide holder distribution',
-        strength: 'strong',
-        evidence: `${onChainData.uniqueHolders.toLocaleString()} unique token holders`,
-      });
-    } else if (onChainData.uniqueHolders > 100) {
-      score += 10;
-    }
+  const marketCap = Math.max(market?.marketCap ?? 0, dex?.marketCap ?? 0);
+  const liquidity = dex?.liquidityUsd ?? 0;
 
-    if (onChainData.isVerified) {
-      score += 15;
-      signals.push({
-        signal: 'Verified contract',
-        strength: 'strong',
-        evidence: 'Source code publicly verified on-chain',
-      });
-    }
-  }
-
-  const listedCount = marketData?.listedExchanges ?? marketData?.cexNames?.length ?? 0;
-  if (listedCount > 3) {
-    score += 15;
+  if (onChain?.isVerified) {
+    score += 18;
     signals.push({
-      signal: 'Multi-exchange listing',
+      signal: 'Verified contract',
       strength: 'strong',
-      evidence: `Listed on ${listedCount} tracked CEX venues`,
+      evidence: 'Etherscan source verification',
     });
   }
 
-  const marketCap = marketData?.marketCap ?? 0;
-  if (marketCap > 1e9) {
-    score += 35;
-    signals.push({
-      signal: 'Blue-chip market cap',
-      strength: 'strong',
-      evidence: `$${(marketCap / 1e9).toFixed(1)}B market cap`,
-    });
-  } else if (marketCap > 1e8) {
+  if (onChain?.holderCountAvailable && onChain.uniqueHolders !== null) {
+    if (onChain.uniqueHolders > 10_000) {
+      score += 22;
+      signals.push({
+        signal: 'Wide holder base',
+        strength: 'strong',
+        evidence: `${onChain.uniqueHolders.toLocaleString()} holders`,
+      });
+    } else if (onChain.uniqueHolders > 1_000) {
+      score += 12;
+    } else if (onChain.uniqueHolders > 100) {
+      score += 5;
+    }
+  }
+
+  if (liquidity > 1_000_000) {
     score += 20;
     signals.push({
-      signal: 'Established market cap',
+      signal: 'Deep DEX liquidity',
       strength: 'strong',
-      evidence: `$${(marketCap / 1e6).toFixed(0)}M market cap`,
+      evidence: `$${(liquidity / 1e6).toFixed(2)}M pooled liquidity`,
     });
-  } else if (marketCap > 1e7) {
-    score += 10;
+  } else if (liquidity > 100_000) {
+    score += 12;
     signals.push({
-      signal: 'Established market cap',
+      signal: 'Established liquidity',
       strength: 'medium',
-      evidence: `$${(marketCap / 1e6).toFixed(1)}M market cap`,
+      evidence: `$${(liquidity / 1e3).toFixed(0)}K DEX liquidity`,
+    });
+  } else if (liquidity > 25_000) {
+    score += 6;
+  }
+
+  if (marketCap > 1e9) {
+    score += 25;
+    signals.push({ signal: 'Blue-chip market cap', strength: 'strong', evidence: `$${(marketCap / 1e9).toFixed(1)}B` });
+  } else if (marketCap > 1e8) {
+    score += 16;
+  } else if (marketCap > 1e7) {
+    score += 8;
+  }
+
+  const listed = market?.listedExchanges ?? market?.cexNames?.length ?? 0;
+  if (listed >= 3) {
+    score += 12;
+    signals.push({
+      signal: 'CEX listings',
+      strength: 'strong',
+      evidence: `${listed} major exchange listings`,
+    });
+  }
+
+  if (dex && dex.pairAgeDays > 180) {
+    score += 8;
+    signals.push({
+      signal: 'Mature trading history',
+      strength: 'medium',
+      evidence: `DEX pair active for ${Math.floor(dex.pairAgeDays)} days`,
     });
   }
 
   if (github) {
-    const { metrics, codeQuality } = github;
-    if (metrics.contributors >= 10) {
-      score += 10;
-      signals.push({
-        signal: 'Active contributor base',
-        strength: 'strong',
-        evidence: `${metrics.contributors} contributors on GitHub`,
-      });
-    }
-    if (codeQuality.hasDocumentation) {
-      score += 5;
-      signals.push({
-        signal: 'Public documentation',
-        strength: 'medium',
-        evidence: 'README or docs folder present in repo',
-      });
-    }
-    if (codeQuality.licensedCode) {
-      score += 5;
-      signals.push({
-        signal: 'Open-source license',
-        strength: 'medium',
-        evidence: 'Repository includes a license file',
-      });
-    }
+    if (github.metrics.contributors >= 10) score += 8;
+    if (github.codeQuality.licensedCode) score += 4;
+    if (github.codeQuality.hasDocumentation) score += 4;
   }
 
   return { score: Math.min(100, score), signals };
 }
 
 function calculateInnovationScore(
-  marketData: MarketSnapshot | null,
-  chain: string,
+  market: MarketSnapshot | null,
+  dex: DexSnapshot | null,
   github: GitHubSnapshot | null
 ): number {
-  let score = 50;
+  let score = 25;
 
-  if (marketData) {
-    const vol = marketData.volume24h;
-    if (vol > 1e8) score += 30;
-    else if (vol > 1e7) score += 20;
-    else if (vol > 1e6) score += 10;
+  const vol = Math.max(market?.volume24h ?? 0, dex?.volume24h ?? 0);
+  if (vol > 1e8) score += 32;
+  else if (vol > 1e7) score += 24;
+  else if (vol > 1e6) score += 16;
+  else if (vol > 1e5) score += 10;
+  else if (vol > 1e4) score += 5;
 
-    if (marketData.priceChange24h > 5) score += 5;
+  if (dex) {
+    if (dex.txns24h > 500) score += 18;
+    else if (dex.txns24h > 100) score += 12;
+    else if (dex.txns24h > 30) score += 7;
+    else if (dex.txns24h > 10) score += 3;
+
+    const momentum = dex.priceChange24h;
+    if (momentum > 15) score += 8;
+    else if (momentum > 5) score += 4;
+    else if (momentum < -25) score -= 5;
   }
 
   if (github) {
-    const { metrics, codeQuality } = github;
-    if (metrics.commitCount >= 50) score += 15;
-    else if (metrics.commitCount >= 15) score += 8;
-    if (metrics.starCount >= 1000) score += 10;
-    else if (metrics.starCount >= 100) score += 5;
-    if (codeQuality.qualityScore >= 60) score += 10;
-    if (metrics.developmentVelocity >= 1) score += 10;
+    if (github.metrics.commitCount >= 50) score += 14;
+    else if (github.metrics.commitCount >= 15) score += 7;
+    if (github.metrics.starCount >= 500) score += 8;
+    if (github.codeQuality.qualityScore >= 60) score += 6;
   }
 
-  if (chain.toLowerCase() === 'ethereum' || chain.toLowerCase() === 'solana') {
-    score += 5;
-  }
-
-  return Math.min(100, score);
+  return Math.min(100, Math.max(0, score));
 }
 
 function calculateSurvivalProbability(data: {
@@ -269,17 +308,18 @@ export function scoreFromGathered(
   _inputs: ScoringInputs,
   gathered: GatheredScoreData
 ): ScoringResults {
-  const marketForRisk = gathered.market
-    ? { marketCap: gathered.market.marketCap, listedExchanges: gathered.market.listedExchanges }
-    : null;
-
-  const { score: rugRisk, flags: redFlags } = calculateRugRiskScore(gathered.onChain, marketForRisk as MarketSnapshot);
+  const { score: rugRisk, flags: redFlags } = calculateRugRiskScore(
+    gathered.onChain,
+    gathered.market,
+    gathered.dex
+  );
   const { score: legitimacy, signals: positiveSignals } = calculateLegitimacyScore(
     gathered.onChain,
     gathered.market,
+    gathered.dex,
     gathered.github
   );
-  const innovation = calculateInnovationScore(gathered.market, _inputs.chain, gathered.github);
+  const innovation = calculateInnovationScore(gathered.market, gathered.dex, gathered.github);
   const survival = calculateSurvivalProbability({ legitimacy, innovation, rugRisk });
 
   return {
@@ -292,40 +332,64 @@ export function scoreFromGathered(
   };
 }
 
-/** Fetch live data then score (used by background sync) */
 export async function scoreProject(projectName: string, inputs: ScoringInputs): Promise<ScoringResults> {
   try {
-    const [onChainRaw, marketRaw, exchanges, githubData] = await Promise.all([
+    let coingeckoId = inputs.coingeckoId;
+    if (inputs.contractAddress && !coingeckoId) {
+      const resolved = await resolveCoinByContract(inputs.contractAddress);
+      if (resolved) coingeckoId = resolved.id;
+    }
+
+    const [onChainRaw, dexRaw, marketRaw, exchanges, githubData] = await Promise.all([
       inputs.contractAddress ? analyzeOnChainMetrics(inputs.contractAddress) : Promise.resolve(null),
-      inputs.coingeckoId ? getMarketData(inputs.coingeckoId) : Promise.resolve(null),
-      inputs.coingeckoId ? checkExchangeListing(inputs.coingeckoId) : Promise.resolve(null),
+      inputs.contractAddress ? getDexMetricsByToken(inputs.contractAddress) : Promise.resolve(null),
+      coingeckoId ? getMarketData(coingeckoId) : Promise.resolve(null),
+      coingeckoId ? checkExchangeListing(coingeckoId) : Promise.resolve(null),
       resolveGithubSnapshot(inputs.githubRepo),
     ]);
 
     const onChain: OnChainSnapshot | null =
       onChainRaw && inputs.contractAddress
         ? {
-            uniqueHolders: (onChainRaw as { uniqueHolders?: number }).uniqueHolders ?? 0,
+            uniqueHolders: onChainRaw.uniqueHolders,
             transactionCount: onChainRaw.transactionCount,
-            isVerified: Boolean((onChainRaw as { isVerified?: boolean }).isVerified),
-            deployDate: null,
-            deployerWallet: null,
+            isVerified: onChainRaw.isVerified,
+            deployDate: onChainRaw.deployDate,
+            deployerWallet: onChainRaw.deployerWallet,
             contractAddress: inputs.contractAddress,
+            holderCountAvailable: onChainRaw.holderCountAvailable,
           }
         : null;
 
-    const market: MarketSnapshot | null = marketRaw
+    const dex: DexSnapshot | null = dexRaw
       ? {
-          tokenPrice: marketRaw.tokenPrice,
-          marketCap: marketRaw.marketCap,
-          volume24h: marketRaw.volume24h,
-          priceChange24h: marketRaw.priceChange24h,
-          listedExchanges: exchanges?.exchanges.length ?? 0,
-          cexNames: exchanges?.exchanges ?? [],
+          liquidityUsd: dexRaw.liquidityUsd,
+          volume24h: dexRaw.volume24h,
+          marketCap: dexRaw.marketCap,
+          priceUsd: dexRaw.priceUsd,
+          priceChange24h: dexRaw.priceChange24h,
+          pairAgeDays: dexRaw.pairAgeDays,
+          buys24h: dexRaw.buys24h,
+          sells24h: dexRaw.sells24h,
+          txns24h: dexRaw.txns24h,
+          dexId: dexRaw.dexId,
         }
       : null;
 
-    return scoreFromGathered(projectName, inputs, { onChain, market, github: githubData });
+    const market: MarketSnapshot | null =
+      marketRaw || dexRaw
+        ? {
+            tokenPrice: marketRaw?.tokenPrice || dexRaw?.priceUsd || 0,
+            marketCap: Math.max(marketRaw?.marketCap ?? 0, dexRaw?.marketCap ?? 0),
+            volume24h: Math.max(marketRaw?.volume24h ?? 0, dexRaw?.volume24h ?? 0),
+            priceChange24h: marketRaw?.priceChange24h ?? dexRaw?.priceChange24h ?? 0,
+            liquidityUsd: dexRaw?.liquidityUsd ?? 0,
+            listedExchanges: exchanges?.exchanges.length ?? 0,
+            cexNames: exchanges?.exchanges ?? [],
+          }
+        : null;
+
+    return scoreFromGathered(projectName, inputs, { onChain, market, dex, github: githubData });
   } catch (error) {
     console.error(`Error scoring project ${projectName}:`, error);
     return {
@@ -339,7 +403,7 @@ export async function scoreProject(projectName: string, inputs: ScoringInputs): 
   }
 }
 
-async function resolveGithubSnapshot(githubRepo?: string): Promise<GitHubSnapshot | null> {
+async function resolveGithubSnapshot(githubRepo?: string) {
   if (!githubRepo) return null;
   const parsed = parseGitHubRepo(githubRepo);
   if (!parsed) return null;
@@ -356,6 +420,6 @@ async function resolveGithubSnapshot(githubRepo?: string): Promise<GitHubSnapsho
     url: `https://github.com/${repoPath}`,
     metrics,
     codeQuality,
-    activityScore: 0,
+    activityScore: githubActivityScore(metrics, codeQuality),
   };
 }

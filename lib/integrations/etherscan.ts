@@ -1,127 +1,145 @@
 /**
- * Etherscan Integration
- * Fetches on-chain signals for Ethereum projects
+ * Etherscan API V2 — on-chain contract signals
  */
 
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || '';
-const ETHERSCAN_BASE_URL = 'https://api.etherscan.io/api';
+const ETHERSCAN_V2_BASE = 'https://api.etherscan.io/v2/api';
+const DEFAULT_CHAIN_ID = '1';
 
 export interface ContractInfo {
   contractAddress: string;
   deployerWallet: string;
-  deployDate: Date;
+  deployDate: Date | null;
   totalSupply: string;
-  burnedTokens: string;
   isVerified: boolean;
-  sourceCode: string;
-  compiler: string;
-}
-
-export interface LiquiditySignals {
-  totalLiquidity: number;
-  liquidityLocked: boolean;
-  lockDuration?: number;
-  lockPercentage: number;
 }
 
 export interface OnChainMetrics {
   transactionCount: number;
-  uniqueHolders: number;
+  uniqueHolders: number | null;
   largeTransactions: number;
   rugPullIndicators: number;
+  isVerified: boolean;
+  deployDate: string | null;
+  deployerWallet: string | null;
+  holderCountAvailable: boolean;
 }
 
-/**
- * Get contract deployment info from Etherscan
- */
-export async function getContractInfo(address: string): Promise<ContractInfo | null> {
+function v2Url(params: Record<string, string>, chainId = DEFAULT_CHAIN_ID): string {
+  const q = new URLSearchParams({
+    chainid: chainId,
+    apikey: ETHERSCAN_API_KEY,
+    ...params,
+  });
+  return `${ETHERSCAN_V2_BASE}?${q.toString()}`;
+}
+
+async function etherscanGet<T>(params: Record<string, string>): Promise<T | null> {
+  if (!ETHERSCAN_API_KEY) {
+    console.warn('Etherscan API key not configured');
+    return null;
+  }
   try {
-    if (!ETHERSCAN_API_KEY) {
-      console.warn('Etherscan API key not configured');
+    const res = await fetch(v2Url(params), { cache: 'no-store' });
+    const data = await res.json();
+    if (data.status !== '1' && data.message !== 'OK') {
       return null;
     }
-
-    const response = await fetch(
-      `${ETHERSCAN_BASE_URL}?module=contract&action=getsourcecode&address=${address}&apikey=${ETHERSCAN_API_KEY}`
-    );
-
-    const data = await response.json();
-    if (data.result && data.result[0]) {
-      const contract = data.result[0];
-      return {
-        contractAddress: address,
-        deployerWallet: contract.Creator || '',
-        deployDate: new Date(parseInt(contract.TimeStamp) * 1000),
-        totalSupply: contract.TokenSupply || '0',
-        burnedTokens: '0', // Would need to calculate from logs
-        isVerified: contract.SourceCode ? true : false,
-        sourceCode: contract.SourceCode || '',
-        compiler: contract.CompilerVersion || '',
-      };
-    }
-    return null;
+    return data.result as T;
   } catch (error) {
-    console.error('Etherscan contract info error:', error);
+    console.error('Etherscan V2 error:', error);
     return null;
   }
 }
 
-/**
- * Check for liquidity lock indicators
- */
-export async function getLiquiditySignals(contractAddress: string): Promise<LiquiditySignals> {
-  try {
-    // This would typically query lock contracts (Uniswap V2 Locker, Pinksale, etc.)
-    // For now, returning a template
-    return {
-      totalLiquidity: 0,
-      liquidityLocked: false,
-      lockPercentage: 0,
-    };
-  } catch (error) {
-    console.error('Liquidity signals error:', error);
-    return {
-      totalLiquidity: 0,
-      liquidityLocked: false,
-      lockPercentage: 0,
-    };
-  }
+export async function getContractInfo(address: string): Promise<ContractInfo | null> {
+  const result = await etherscanGet<Array<Record<string, string>>>({
+    module: 'contract',
+    action: 'getsourcecode',
+    address: address.toLowerCase(),
+  });
+
+  if (!result?.[0]) return null;
+
+  const contract = result[0];
+  const ts = parseInt(contract.TimeStamp || '0', 10);
+
+  return {
+    contractAddress: address,
+    deployerWallet: contract.Creator || '',
+    deployDate: ts > 0 ? new Date(ts * 1000) : null,
+    totalSupply: contract.TokenSupply || '0',
+    isVerified: Boolean(contract.SourceCode && contract.SourceCode.length > 2),
+  };
 }
 
-/**
- * Analyze on-chain transaction patterns for rug pull indicators
- */
 export async function analyzeOnChainMetrics(contractAddress: string): Promise<OnChainMetrics> {
-  try {
-    if (!ETHERSCAN_API_KEY) {
-      return { transactionCount: 0, uniqueHolders: 0, largeTransactions: 0, rugPullIndicators: 0 };
-    }
+  const address = contractAddress.toLowerCase();
+  const empty: OnChainMetrics = {
+    transactionCount: 0,
+    uniqueHolders: null,
+    largeTransactions: 0,
+    rugPullIndicators: 0,
+    isVerified: false,
+    deployDate: null,
+    deployerWallet: null,
+    holderCountAvailable: false,
+  };
 
-    // Fetch holder count + contract verification in parallel
-    const [holderRes, contractRes] = await Promise.all([
-      fetch(`${ETHERSCAN_BASE_URL}?module=token&action=tokenholdercount&contractaddress=${contractAddress}&apikey=${ETHERSCAN_API_KEY}`),
-      fetch(`${ETHERSCAN_BASE_URL}?module=contract&action=getabi&address=${contractAddress}&apikey=${ETHERSCAN_API_KEY}`),
+  if (!ETHERSCAN_API_KEY) return empty;
+
+  try {
+    const [contractInfo, holderResult, abiResult] = await Promise.all([
+      getContractInfo(address),
+      fetch(
+        v2Url({
+          module: 'token',
+          action: 'tokenholdercount',
+          contractaddress: address,
+        }),
+        { cache: 'no-store' }
+      ).then((r) => r.json()),
+      fetch(
+        v2Url({
+          module: 'contract',
+          action: 'getabi',
+          address,
+        }),
+        { cache: 'no-store' }
+      ).then((r) => r.json()),
     ]);
 
-    const holderData = await holderRes.json();
-    const contractData = await contractRes.json();
+    let uniqueHolders: number | null = null;
+    let holderCountAvailable = false;
 
-    // holdercount returns a numeric string on success
-    const holderCount = typeof holderData.result === 'string' && /^\d+$/.test(holderData.result)
-      ? parseInt(holderData.result, 10)
-      : 0;
+    if (
+      holderResult?.status === '1' &&
+      typeof holderResult.result === 'string' &&
+      /^\d+$/.test(holderResult.result)
+    ) {
+      uniqueHolders = parseInt(holderResult.result, 10);
+      holderCountAvailable = true;
+    }
 
-    const isVerified = contractData.status === '1' && typeof contractData.result === 'string' && contractData.result.length > 10;
+    const abiVerified =
+      abiResult?.status === '1' &&
+      typeof abiResult.result === 'string' &&
+      abiResult.result.length > 10;
+
+    const isVerified = contractInfo?.isVerified ?? abiVerified;
 
     return {
-      transactionCount: holderCount > 0 ? holderCount : 0,
-      uniqueHolders: holderCount,
+      transactionCount: uniqueHolders ?? 0,
+      uniqueHolders,
       largeTransactions: 0,
-      rugPullIndicators: holderCount < 10 ? 1 : 0,
+      rugPullIndicators: uniqueHolders !== null && uniqueHolders < 10 ? 1 : 0,
       isVerified,
-    } as any;
+      deployDate: contractInfo?.deployDate?.toISOString() ?? null,
+      deployerWallet: contractInfo?.deployerWallet ?? null,
+      holderCountAvailable,
+    };
   } catch (error) {
     console.error('On-chain metrics error:', error);
-    return { transactionCount: 0, uniqueHolders: 0, largeTransactions: 0, rugPullIndicators: 0 };
+    return empty;
   }
 }

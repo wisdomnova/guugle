@@ -27,12 +27,13 @@ export function AnalysisBreakdown({ result }: AnalysisBreakdownProps) {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {intel.market && (
           <IntelCard title="Market" icon={TrendingUp} accent="var(--color-accent)">
             <MetricRow label="Price" value={formatUsd(intel.market.tokenPrice)} />
             <MetricRow label="Market cap" value={formatUsd(intel.market.marketCap)} />
             <MetricRow label="24h volume" value={formatUsd(intel.market.volume24h)} />
+            <MetricRow label="DEX liquidity" value={formatUsd(intel.market.liquidityUsd)} />
             <MetricRow
               label="24h change"
               value={formatPct(intel.market.priceChange24h)}
@@ -54,9 +55,28 @@ export function AnalysisBreakdown({ result }: AnalysisBreakdownProps) {
           </IntelCard>
         )}
 
+        {intel.dex && (
+          <IntelCard title="DEX activity" icon={Activity} accent="var(--color-warning)">
+            <MetricRow label="Liquidity" value={formatUsd(intel.dex.liquidityUsd)} />
+            <MetricRow label="Pair age" value={`${Math.floor(intel.dex.pairAgeDays)} days`} />
+            <MetricRow label="24h txs" value={String(intel.dex.txns24h)} />
+            <MetricRow label="Buys / sells" value={`${intel.dex.buys24h} / ${intel.dex.sells24h}`} />
+            <MetricRow label="DEX" value={intel.dex.dexId || '—'} />
+          </IntelCard>
+        )}
+
         {intel.onChain && (
           <IntelCard title="On-chain" icon={Shield} accent="var(--color-accent-secondary)">
-            <MetricRow label="Holders" value={intel.onChain.uniqueHolders.toLocaleString()} />
+            <MetricRow
+              label="Holders"
+              value={
+                intel.onChain.uniqueHolders !== null
+                  ? intel.onChain.uniqueHolders.toLocaleString()
+                  : intel.onChain.holderCountAvailable
+                    ? '0'
+                    : 'N/A (Pro API)'
+              }
+            />
             <MetricRow
               label="Contract verified"
               value={intel.onChain.isVerified ? 'Yes' : 'No'}

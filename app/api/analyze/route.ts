@@ -1,18 +1,9 @@
 import { NextResponse } from 'next/server';
 import { runFullAnalysis } from '@/lib/analysis';
+import { resolveCoinByContract } from '@/lib/integrations/coingecko';
+import { cgFetch } from '@/lib/coingecko-client';
 
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || '';
-const ETHERSCAN_BASE_URL = 'https://api.etherscan.io/api';
-const COINGECKO_PRO_BASE = 'https://pro-api.coingecko.com/api/v3';
-const COINGECKO_FREE_BASE = 'https://api.coingecko.com/api/v3';
-const COINGECKO_API_KEY = process.env.COINGECKO_PRO_API_KEY || '';
-
-function cgHeaders(): Record<string, string> {
-  return COINGECKO_API_KEY ? { 'x-cg-pro-api-key': COINGECKO_API_KEY } : {};
-}
-function cgBase() {
-  return COINGECKO_API_KEY ? COINGECKO_PRO_BASE : COINGECKO_FREE_BASE;
-}
+export const dynamic = 'force-dynamic';
 
 async function resolveTokenMeta(address: string): Promise<{
   name: string;
@@ -20,37 +11,19 @@ async function resolveTokenMeta(address: string): Promise<{
   contractAddress: string;
   github?: string;
 }> {
-  let name = `${address.slice(0, 8)}...${address.slice(-4)}`;
+  const normalized = address.toLowerCase();
+  let name = `${normalized.slice(0, 8)}…${normalized.slice(-4)}`;
   let coingeckoId: string | undefined;
   let github: string | undefined;
 
-  try {
-    const res = await fetch(
-      `${ETHERSCAN_BASE_URL}?module=token&action=tokeninfo&contractaddress=${address}&apikey=${ETHERSCAN_API_KEY}`
-    );
-    const data = await res.json();
-    if (Array.isArray(data.result) && data.result[0]?.tokenName) {
-      name = data.result[0].tokenName;
-    }
-  } catch {
-    /* ignore */
+  const cg = await resolveCoinByContract(normalized);
+  if (cg) {
+    coingeckoId = cg.id;
+    name = cg.name;
+    github = cg.github;
   }
 
-  try {
-    const res = await fetch(`${cgBase()}/coins/ethereum/contract/${address}`, { headers: cgHeaders() });
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.id) {
-        coingeckoId = data.id;
-        if (data.name) name = data.name;
-        github = data.links?.repos_url?.github?.[0];
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  return { name, coingeckoId, contractAddress: address, github };
+  return { name, coingeckoId, contractAddress: normalized, github };
 }
 
 export async function GET(request: Request) {
@@ -64,7 +37,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const isAddress = /^0x[0-9a-fA-F]{10,}$/.test(input);
+  const isAddress = /^0x[0-9a-fA-F]{40}$/i.test(input);
 
   try {
     let projectName = input;
@@ -81,21 +54,18 @@ export async function GET(request: Request) {
       githubRepo = meta.github;
     } else {
       try {
-        const res = await fetch(
-          `${cgBase()}/coins/${encodeURIComponent(input.toLowerCase())}?localization=false&tickers=false&community_data=false&developer_data=true`,
-          { headers: cgHeaders() }
+        const res = await cgFetch(
+          `/coins/${encodeURIComponent(input.toLowerCase())}?localization=false&tickers=false&community_data=false&developer_data=true`
         );
         if (res.ok) {
           const data = await res.json();
           coingeckoId = data.id;
           projectName = data.name ?? input;
-          contractAddress = data.platforms?.ethereum || undefined;
+          contractAddress = data.platforms?.ethereum?.toLowerCase() || undefined;
           chain = contractAddress ? 'Ethereum' : 'Unknown';
           githubRepo = data.links?.repos_url?.github?.[0];
         } else {
-          const searchRes = await fetch(`${cgBase()}/search?query=${encodeURIComponent(input)}`, {
-            headers: cgHeaders(),
-          });
+          const searchRes = await cgFetch(`/search?query=${encodeURIComponent(input)}`);
           if (searchRes.ok) {
             const searchData = await searchRes.json();
             const first = searchData.coins?.[0];
@@ -118,7 +88,9 @@ export async function GET(request: Request) {
       githubRepo,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'no-store, max-age=0' },
+    });
   } catch (err) {
     console.error('Analyze error:', err);
     return NextResponse.json({ error: 'Failed to analyze project' }, { status: 500 });

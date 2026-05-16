@@ -67,7 +67,12 @@ async function updateProjectScores(
       githubRepo,
     });
 
-    const scores = scoreFromGathered(projectName, { ...scoringInputs, githubRepo }, intelligence);
+    const scores = scoreFromGathered(projectName, { ...scoringInputs, githubRepo }, {
+      onChain: intelligence.onChain,
+      market: intelligence.market,
+      dex: intelligence.dex,
+      github: intelligence.github,
+    });
 
     const githubActivity = intelligence.github?.activityScore ?? 0;
     const communitySize = intelligence.github?.metrics.starCount ?? 0;
