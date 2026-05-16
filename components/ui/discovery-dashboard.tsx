@@ -70,7 +70,7 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
     stage: 'launched',
     contractAddress: r.contractAddress,
     coingeckoId: r.coingeckoId,
-    website: r.intelligence.token?.website,
+    website: r.intelligence.social?.website || r.intelligence.token?.website,
     founders: [],
     productStatus: 'launched',
     tokenStatus: r.contractAddress ? 'public' : 'planned',
@@ -167,6 +167,21 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
                   <X size={14} />
                 </button>
               </div>
+              {(analyzeResult.intelligence.token?.website ||
+                analyzeResult.intelligence.social?.website) && (
+                <div className="flex flex-wrap gap-3">
+                  {analyzeResult.intelligence.token?.website && (
+                    <a
+                      href={analyzeResult.intelligence.token.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-[var(--color-accent)] hover:underline"
+                    >
+                      Website ↗
+                    </a>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   { k: 'Rug risk', v: analyzeResult.scores.rugRiskScore },

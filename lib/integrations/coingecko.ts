@@ -3,6 +3,7 @@
  */
 
 import { cgFetch } from '../coingecko-client';
+import { pickWebsite } from '../link-utils';
 
 export interface MarketMetrics {
   tokenPrice: number;
@@ -40,7 +41,13 @@ export async function getMarketData(tokenId: string): Promise<MarketMetrics | nu
 /** Resolve CoinGecko coin id + metadata from an Ethereum contract address */
 export async function resolveCoinByContract(
   contractAddress: string
-): Promise<{ id: string; name: string; symbol: string; github?: string } | null> {
+): Promise<{
+  id: string;
+  name: string;
+  symbol: string;
+  github?: string;
+  website?: string;
+} | null> {
   try {
     const res = await cgFetch(`/coins/ethereum/contract/${contractAddress.toLowerCase()}`);
     if (!res.ok) return null;
@@ -51,6 +58,7 @@ export async function resolveCoinByContract(
       name: data.name,
       symbol: (data.symbol || '').toUpperCase(),
       github: data.links?.repos_url?.github?.[0],
+      website: pickWebsite(data.links?.homepage),
     };
   } catch {
     return null;
@@ -62,7 +70,6 @@ export async function getTokenInfo(tokenId: string): Promise<{
   symbol: string;
   description: string;
   website: string;
-  twitter: string;
   github: string;
   contractAddress: string;
 }> {
@@ -71,14 +78,13 @@ export async function getTokenInfo(tokenId: string): Promise<{
     symbol: '',
     description: '',
     website: '',
-    twitter: '',
     github: '',
     contractAddress: '',
   };
 
   try {
     const response = await cgFetch(
-      `/coins/${encodeURIComponent(tokenId)}?localization=false&tickers=false&market_data=false`
+      `/coins/${encodeURIComponent(tokenId)}?localization=false&tickers=false&market_data=false&community_data=true&developer_data=false`
     );
     if (!response.ok) return empty;
 
@@ -87,8 +93,7 @@ export async function getTokenInfo(tokenId: string): Promise<{
       name: data.name,
       symbol: data.symbol?.toUpperCase() ?? '',
       description: data.description?.en || '',
-      website: data.links?.homepage?.[0] || '',
-      twitter: data.links?.twitter_screen_handle || '',
+      website: pickWebsite(data.links?.homepage),
       github: data.links?.repos_url?.github?.[0] || '',
       contractAddress: data.platforms?.ethereum || '',
     };

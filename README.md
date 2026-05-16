@@ -2,7 +2,7 @@
 
 Paste any contract address. Get the full intelligence picture before you ape.
 
-Live rug risk scoring + OKX security pre-flight + smart money signals. No seed data. No static rankings. Every query hits Etherscan, CoinGecko, and the OKX skill suite.
+Live rug risk scoring, OKX security pre-flight, smart money signals, and on-chain + market data. Every analyze query hits Etherscan, DexScreener, CoinGecko, and GitHub — no cached scores, no fake-address results.
 
 Hackathon kicks off May 11, 2026. Node >= 18.17 required.
 
@@ -10,179 +10,163 @@ Hackathon kicks off May 11, 2026. Node >= 18.17 required.
 
 ## What you get
 
-Guugle is a token intelligence dashboard built on the OKX skill suite. Drop a contract address or token name into the analyze bar:
+Drop a **contract address** or **token name** into the analyze bar:
 
-- **Rug Risk Score** — holder concentration, liquidity depth, contract verification, deployer history
-- **Legitimacy Index** — market cap tier, exchange listings, on-chain age
-- **Innovation Delta** — trading volume momentum, unique holder growth
-- **OKX Security Widget** — honeypot detection, phishing dApp scan, token risk pre-flight (powered by `okx-security`)
-- **OKX Smart Money Widget** — KOL trade feeds, whale cluster signals, aggregated alpha (powered by `okx-dex-signal`)
-- **Market Intelligence** — live price, volume, OHLC, holder distribution (powered by `okx-market`)
+| Signal | Source | What it checks |
+|--------|--------|----------------|
+| **Rug risk** | Etherscan + DexScreener | Liquidity depth, pair age, holder concentration, contract verification, deploy age |
+| **Legitimacy** | CoinGecko + on-chain | Market cap tier, CEX listings, verified contract, website on file |
+| **Innovation** | CoinGecko + DEX | 24h volume, trading activity, GitHub dev velocity |
+| **Survival** | Composite | Weighted blend of legitimacy, innovation, and inverse rug risk |
+| **OKX Security** | `okx-security` | Honeypot, phishing dApp scan, token risk pre-flight |
+| **OKX Smart Money** | `okx-dex-signal` | KOL trades, whale clusters, aggregated alpha |
+| **OKX Market** | `okx-market` | Live price, volume, OHLC |
 
-Every score is calculated live. No DB lookups for cached scores — every analysis is a fresh API call.
+**Contract validation** — invalid or unknown addresses return an error instead of fabricated scores. Real tokens resolve to their **name** and **website** from CoinGecko (with DexScreener / Etherscan fallbacks for names).
+
+**Tracked protocols** grid live-rescores seeded blue chips on each page load so cards never show identical stale numbers.
 
 ---
 
 ## How it fits together
 
 ```
-              Guugle dashboard
-              (Next.js web UI)
-   ┌──────────────┼──────────────┐
-   │              │              │
- Etherscan      OKX            CoinGecko
- on-chain       skill          market
- metrics        suite          data
-   ↑              ↑              ↑
- contract      security /      price /
- verification  smart money     volume /
- holder count  signals         cap tier
+                    Guugle dashboard
+                    (Next.js web UI)
+         ┌──────────────┼──────────────┐
+         │              │              │
+    Etherscan       DexScreener      CoinGecko
+    on-chain        DEX pairs        price / cap
+    verify          liquidity        website
+         │              │              │
+         └──────────────┼──────────────┘
+                        │
+                   OKX skill suite
+              security / smart money / market
+                        │
+                     GitHub
+                  (public repos)
 ```
 
-| Layer | Owned by | What it does | What Guugle does |
-|---|---|---|---|
-| **Identity** | XAgent | Registers hackathon participants | You run `xagt-plugin login` once |
-| **Intelligence** | OKX skill suite | Security scans, smart money feeds, market data | Guugle calls `okx-security`, `okx-dex-signal`, `okx-market` on every analyze |
-| **On-Chain** | Etherscan | Contract verification, holder distribution, tx history | Guugle fetches live metrics via Etherscan API |
-| **Market** | CoinGecko | Token price, volume, market cap, exchange listings | Guugle enriches scores with CoinGecko Pro API |
-| **Product** | You | UX, scoring algorithm, dashboard, modal | Guugle combines all 4 layers into one intelligence view |
-
-A finished hackathon project uses all layers. Guugle wires them together — you deploy and submit.
-
----
-
-## Product shape
-
-**Rug-proof intelligence dashboard** — user pastes any contract address; Guugle runs live scoring (Etherscan + CoinGecko) + OKX security pre-flight; honeypots and low-legitimacy tokens flagged before user buys; full intelligence modal shows smart money signals via `okx-dex-signal`.
-
-Similar to the "Rug-proof Swap Frontend" seed idea, but analytics-first instead of swap-first.
+| Layer | Provider | Guugle uses it for |
+|-------|----------|-------------------|
+| **Identity** | XAgent | Hackathon registration (`xagt-plugin login`) |
+| **Security** | OKX `okx-security` | Pre-trade risk widgets in full report |
+| **Alpha** | OKX `okx-dex-signal` | Smart money panel |
+| **Market** | OKX `okx-market` + CoinGecko | Price, volume, cap tier |
+| **On-chain** | Etherscan V2 | Verification, deployer, holders (Pro for holder count) |
+| **DEX** | DexScreener | Per-CA liquidity, pair age, buy/sell pressure |
+| **Dev** | GitHub API | Stars, commits, contributors, code quality |
+| **Product** | You | Scoring, dashboard, analyze UX |
 
 ---
 
-## Run it locally
+## Run locally
 
 ```bash
-git clone https://github.com/<you>/guugle
+git clone https://github.com/wisdomnova/guugle.git
 cd guugle
 npm install
-cp .env.local.example .env.local   # fill in your keys
+cp .env.local.example .env.local   # fill in keys
 npm run dev
-# open http://localhost:3000
+# http://localhost:3000
 ```
 
-Required env vars:
+### Required env
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://wfnhyoidvpjkdspasnud.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
-ETHERSCAN_API_KEY=<your-etherscan-key>
-COINGECKO_API_KEY=<your-coingecko-pro-key>
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=          # projects API + admin routes
+
+ETHERSCAN_API_KEY=                  # Etherscan API V2 (Ethereum mainnet)
+COINGECKO_PRO_API_KEY=              # CoinGecko Pro (or free tier key)
 ```
 
-Then paste a contract address or token name into the analyze bar:
+### Optional
+
+```bash
+GITHUB_TOKEN=                       # higher GitHub API rate limits
+JOB_SECRET=                         # POST /api/admin/sync-data
+SEED_SECRET=                        # seed endpoint
+```
+
+OKX skills are configured via `xagt-plugin setup --target all` — no OKX key in `.env`.
+
+### Try it
 
 ```
 0x1f9840a85d5af5bf1d1762f925bdaddc4201f984   # Uniswap
 0x514910771af9ca656af840dff83e8264ecf986ca   # Chainlink
-PEPE                                          # name search works too
+uniswap                                        # name search (CoinGecko)
 ```
 
-Hit Enter. Scores appear in ~2 seconds. Click **View Full Intelligence Report** to see OKX widgets.
+Fake / non-existent CAs → **404** with a clear message. Valid CAs → name, website link, and live breakdown in ~2–5s.
 
 ---
 
-## Eligibility
+## API
 
-✅ Registered via `xagt-plugin setup --target all` (or `xagt-plugin login`)  
-✅ Uses OKX skill suite (`okx-security`, `okx-dex-signal`, `okx-market`)  
-✅ Public GitHub repo with source code  
-✅ One-line description: "Paste any CA, get live rug risk + legitimacy + innovation scores + OKX intelligence"
-
-Optional but encouraged:
-- Deployed demo URL (Vercel, Railway, Render, etc.)
-- Demo video / GIF showing the analyze flow
+```
+GET /api/analyze?q=<address or name>   # live analysis (force-dynamic, no cache)
+GET /api/projects                      # tracked protocols (live rescore on load)
+GET /api/search?q=<query>              # DB search; validates 0x addresses
+GET /api/health                        # status
+GET /api/okx                           # OKX skill proxy
+```
 
 ---
 
-## Submit
+## Stack
 
-One command:
+- **Next.js 16** (App Router, Turbopack)
+- **React 19**, TypeScript, Tailwind CSS v4, Framer Motion
+- **Supabase** — project storage
+- **Etherscan V2**, **DexScreener**, **CoinGecko Pro**, **GitHub**
+- **OKX skill suite** — `okx-security`, `okx-dex-signal`, `okx-market`
+
+---
+
+## Hackathon submit
 
 ```bash
 xagt-plugin submit
 ```
 
-Asks you for:
-
 ```
-  Project name:           Guugle
-  One-line description:   Paste any CA, get live rug risk + legitimacy + innovation scores + OKX intelligence
-  GitHub repo URL:        https://github.com/<you>/guugle
-  Deployed URL (optional, blank to skip): https://guugle.vercel.app
+Project name:     Guugle
+Description:      Paste any CA — live rug risk, legitimacy, innovation, OKX intel. Validates unknown contracts.
+Repo:             https://github.com/wisdomnova/guugle
+Deploy (optional): https://your-demo.vercel.app
 ```
 
-Then your browser opens GitHub at the right URL with the submission file pre-filled. Click **Propose new file** → GitHub forks `xerpa-ai/xagt-plugin` to your account and opens the PR for you. Click **Create pull request** and you're done.
-
-The file lands at `projects/<your-participant-id>/README.md`. Judges merge accepted submissions.
-
-Or scripted (CI / Makefile):
+Or scripted:
 
 ```bash
 xagt-plugin submit \
   --name "Guugle" \
-  --intro "Paste any CA, get live rug risk + legitimacy + innovation scores + OKX intelligence" \
-  --repo "https://github.com/<you>/guugle" \
-  --deploy "https://guugle.vercel.app"
+  --intro "Paste any CA — live rug risk, legitimacy, innovation, OKX intel. Validates unknown contracts." \
+  --repo "https://github.com/wisdomnova/guugle" \
+  --deploy "https://your-demo.vercel.app"
 ```
-
-Lost your local credentials? Run `xagt-plugin login` again with the same XAgent account — your participant ID stays stable, so your existing submission folder stays yours.
-
----
-
-## Get help
-
-In-person at the venue. No Discord, no Telegram. Pull a mentor over.
-
----
-
-## Reference
-
-### API Endpoints
-
-```
-GET /api/analyze?q=<address or name>    # live scoring, no DB required
-GET /api/projects                       # stored projects list
-GET /api/search?q=<query>               # full-text search
-GET /api/health                         # system status
-```
-
-### Stack
-
-- **Next.js 16** (App Router, Turbopack)
-- **React 19**, TypeScript
-- **Tailwind CSS v4**, Framer Motion
-- **Supabase** PostgreSQL
-- **Etherscan** API — on-chain metrics
-- **CoinGecko Pro** API — market data
-- **OKX skill suite** — `okx-security`, `okx-dex-signal`, `okx-market`
-
-### XAgent Identity
-
-```bash
-xagt-plugin login      # register / switch accounts
-xagt-plugin doctor     # check session + runtime status
-xagt-plugin logout     # clear local credentials
-```
-
-Credentials live at `~/.config/xagt/credentials.json` (`%APPDATA%\xagt\credentials.json` on Windows), chmod 600.
 
 ---
 
 ## Troubleshooting
 
 | Symptom | Fix |
-|---|---|
-| `npm run dev` fails with Supabase errors | Check `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` |
-| Analyze returns "Analysis failed" | Check `ETHERSCAN_API_KEY` and `COINGECKO_API_KEY` in `.env.local` |
-| OKX widgets show "No data" | Ensure you've run `xagt-plugin setup --target all` to install OKX skills |
-| Build fails with TypeScript errors | Run `npm run build` to see full error trace |
+|---------|-----|
+| Analyze returns 404 for a CA | Address has no CoinGecko, DexScreener, or Etherscan contract signal — try a listed token |
+| All discovery cards show same scores | Hard refresh; first `/api/projects` load rescored live (can take a few seconds) |
+| Holder count shows N/A | Etherscan holder count needs Pro API on V2 |
+| OKX widgets empty | Run `xagt-plugin setup --target all` |
+| Build fails | `npm run build` for full TypeScript trace |
+
+---
+
+## Eligibility
+
+✅ `xagt-plugin login` / setup  
+✅ OKX skill suite in analyze + report modal  
+✅ Public repo  
+✅ Live data (no mock scoring for analyze)

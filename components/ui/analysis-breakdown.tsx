@@ -1,7 +1,15 @@
 'use client';
 
 import type { ComponentType, ReactNode } from 'react';
-import { Activity, Code2, ExternalLink, Shield, TrendingDown, TrendingUp } from 'lucide-react';
+import {
+  Activity,
+  Code2,
+  ExternalLink,
+  Globe,
+  Shield,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react';
 import type { FullAnalysisResult } from '@/lib/analysis';
 import { formatPct, formatUsd } from '@/lib/analysis';
 
@@ -26,6 +34,21 @@ export function AnalysisBreakdown({ result }: AnalysisBreakdownProps) {
           </span>
         ))}
       </div>
+
+      {(intel.token?.website || intel.social?.website) && (
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={intel.token?.website || intel.social?.website || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="badge badge-muted text-xs inline-flex items-center gap-1 hover:border-[var(--color-accent)]"
+            >
+              <Globe size={12} />
+              Website
+              <ExternalLink size={10} />
+            </a>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {intel.market && (
@@ -136,6 +159,7 @@ export function AnalysisBreakdown({ result }: AnalysisBreakdownProps) {
             </p>
           </IntelCard>
         )}
+
       </div>
 
       {(result.redFlags.length > 0 || result.positiveSignals.length > 0) && (

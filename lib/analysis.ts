@@ -20,6 +20,8 @@ import {
   type CodeQualitySignals,
 } from './integrations/github';
 import { scoreFromGathered, type ScoringInputs, type ScoringResults } from './scoring';
+import { buildWebPresenceSnapshot, type SocialSnapshot } from './social-intelligence';
+import { normalizeUrl } from './link-utils';
 
 export interface OnChainSnapshot {
   uniqueHolders: number | null;
@@ -67,12 +69,12 @@ export interface ProjectIntelligencePayload {
   onChain: OnChainSnapshot | null;
   dex: DexSnapshot | null;
   github: GitHubSnapshot | null;
+  social: SocialSnapshot | null;
   token: {
     name: string;
     symbol: string;
     website: string;
     description: string;
-    twitter: string;
   } | null;
   sourcesUsed: string[];
   sourcesMissing: string[];
@@ -142,11 +144,14 @@ export async function gatherProjectIntelligence(inputs: {
   let coingeckoId = inputs.coingeckoId;
   let githubRepo = inputs.githubRepo;
 
+  let linkHints: { website?: string } = {};
+
   if (inputs.contractAddress && !coingeckoId) {
     const resolved = await resolveCoinByContract(inputs.contractAddress);
     if (resolved) {
       coingeckoId = resolved.id;
       if (!githubRepo && resolved.github) githubRepo = resolved.github;
+      linkHints = { website: resolved.website };
     }
   }
 
@@ -213,28 +218,38 @@ export async function gatherProjectIntelligence(inputs: {
     sourcesMissing.push('GitHub (no public repo linked)');
   }
 
-  const token =
+  let token =
     tokenInfo && tokenInfo.name
       ? {
           name: tokenInfo.name,
           symbol: tokenInfo.symbol,
-          website: tokenInfo.website,
+          website: normalizeUrl(tokenInfo.website) || linkHints.website || '',
           description: tokenInfo.description?.slice(0, 280) ?? '',
-          twitter: tokenInfo.twitter,
         }
       : dexTokenRaw?.name
         ? {
             name: dexTokenRaw.name,
             symbol: dexTokenRaw.symbol,
-            website: '',
+            website: linkHints.website || '',
             description: '',
-            twitter: '',
           }
         : null;
 
+  if (!token && linkHints.website) {
+    token = {
+      name: inputs.name,
+      symbol: '',
+      website: linkHints.website,
+      description: '',
+    };
+  }
+
   if (token) sourcesUsed.push(tokenInfo ? 'CoinGecko metadata' : 'DexScreener metadata');
 
-  return { market, onChain, dex, github, token, sourcesUsed, sourcesMissing };
+  const social = buildWebPresenceSnapshot(token?.website);
+  if (social.website) sourcesUsed.push('Project website');
+
+  return { market, onChain, dex, github, social, token, sourcesUsed, sourcesMissing };
 }
 
 export async function runFullAnalysis(params: {
@@ -270,6 +285,25 @@ export async function runFullAnalysis(params: {
     contractAddress: params.contractAddress,
   });
 
+  const social = intelligence.social;
+  const socialRedFlags =
+    social?.signals
+      .filter((s) => s.severity === 'high' || s.severity === 'medium')
+      .map((s) => ({
+        flag: s.signal,
+        severity: s.severity,
+        evidence: s.evidence,
+      })) ?? [];
+
+  const socialPositives =
+    social?.signals
+      .filter((s) => s.severity === 'low' && !s.signal.toLowerCase().includes('unverified'))
+      .map((s) => ({
+        signal: s.signal,
+        strength: 'medium' as const,
+        evidence: s.evidence,
+      })) ?? [];
+
   return {
     name: displayName,
     contractAddress: params.contractAddress ?? null,
@@ -282,8 +316,8 @@ export async function runFullAnalysis(params: {
       survivalProbability: scores.survivalProbability,
       githubActivity: intelligence.github?.activityScore ?? 0,
     },
-    redFlags: scores.redFlags,
-    positiveSignals: scores.positiveSignals,
+    redFlags: [...scores.redFlags, ...socialRedFlags],
+    positiveSignals: [...scores.positiveSignals, ...socialPositives],
     intelligence,
     analyzedAt: new Date().toISOString(),
   };
