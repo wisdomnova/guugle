@@ -14,7 +14,7 @@ function verifySecret(req: NextRequest): boolean {
 
 /**
  * POST /api/admin/import-project
- * Import a new project with real API scoring
+ * Import a new project with on-chain data scoring
  *
  * Body: {
  *   name: string;
@@ -23,8 +23,6 @@ function verifySecret(req: NextRequest): boolean {
  *   website: string;
  *   description: string;
  *   contractAddress?: string;
- *   twitterHandle?: string;
- *   githubRepo?: string;
  *   coingeckoId?: string;
  * }
  */
@@ -38,8 +36,6 @@ export async function POST(req: NextRequest) {
 
     const result = await importNewProject(data.name, data.chain, {
       contractAddress: data.contractAddress,
-      twitterHandle: data.twitterHandle,
-      githubRepo: data.githubRepo,
       coingeckoId: data.coingeckoId,
       chain: data.chain,
       projectStage: 'early',
@@ -82,8 +78,6 @@ export async function GET() {
       website: 'https://project.com',
       description: 'Project description',
       contractAddress: '0x... (optional)',
-      twitterHandle: '@project (optional)',
-      githubRepo: 'owner/repo (optional)',
       coingeckoId: 'token-id (optional)',
     },
     example: `curl -X POST http://localhost:3000/api/admin/import-project \\
@@ -96,8 +90,6 @@ export async function GET() {
     "website": "https://example.com",
     "description": "A decentralized protocol",
     "contractAddress": "0x1234...",
-    "twitterHandle": "@exampleproto",
-    "githubRepo": "example/protocol",
     "coingeckoId": "example-token"
   }'`,
   });

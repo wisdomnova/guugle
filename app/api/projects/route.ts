@@ -37,6 +37,8 @@ export async function GET(request: Request) {
         stage,
         website,
         x_account,
+        contract_address,
+        coingecko_id,
         product_status,
         token_status,
         community_size,

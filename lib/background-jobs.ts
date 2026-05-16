@@ -19,8 +19,6 @@ interface ProjectToScore {
   id: string;
   name: string;
   contract_address?: string;
-  x_account?: string;
-  github_url?: string;
   coingecko_id?: string;
   chain: string;
   product_status: string;
@@ -126,8 +124,6 @@ export async function syncAllProjectData(): Promise<{ updated: number; failed: n
     for (const project of projects) {
       const scoringInputs: ScoringInputs = {
         contractAddress: project.contract_address || undefined,
-        twitterHandle: project.x_account || undefined,
-        githubRepo: project.github_url || undefined,
         coingeckoId: project.coingecko_id || undefined,
         chain: project.chain,
         projectStage: (project.product_status as any) || 'early',

@@ -17,7 +17,8 @@ if (supabaseUrl && supabaseKey) {
 
 /**
  * Real projects to track - manually added by admins
- * Format: [name, chain, contract, twitter, github, coingecko_id]
+ * Format: [name, chain, contract, coingecko_id]
+ * Contract addresses are from mainnet tokens for real scoring
  */
 const projectsToTrack: Array<{
   name: string;
@@ -26,23 +27,62 @@ const projectsToTrack: Array<{
   website: string;
   description: string;
   contractAddress?: string;
-  twitterHandle?: string;
-  githubRepo?: string;
   coingeckoId?: string;
 }> = [
-  // Add projects here manually or via admin dashboard
-  // Example format:
-  // {
-  //   name: 'Example Protocol',
-  //   chain: 'Ethereum',
-  //   category: 'DeFi',
-  //   website: 'https://example.com',
-  //   description: 'Protocol description',
-  //   contractAddress: '0x...',
-  //   twitterHandle: '@example',
-  //   githubRepo: 'example/protocol',
-  //   coingeckoId: 'example-token',
-  // }
+  {
+    name: 'Uniswap',
+    chain: 'Ethereum',
+    category: 'DeFi',
+    website: 'https://uniswap.org',
+    description: 'Decentralized trading protocol',
+    contractAddress: '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984', // UNI
+    coingeckoId: 'uniswap',
+  },
+  {
+    name: 'Aave',
+    chain: 'Ethereum',
+    category: 'DeFi',
+    website: 'https://aave.com',
+    description: 'Lending protocol',
+    contractAddress: '0x7fc66500c84a76ad7e9c93437e434122a1f9adf5', // AAVE
+    coingeckoId: 'aave',
+  },
+  {
+    name: 'Curve Finance',
+    chain: 'Ethereum',
+    category: 'DeFi',
+    website: 'https://curve.fi',
+    description: 'Stablecoin DEX',
+    contractAddress: '0xd533a949740bb3306d119cc777fa900ba034cd52', // CRV
+    coingeckoId: 'curve-dao-token',
+  },
+  {
+    name: 'Lido',
+    chain: 'Ethereum',
+    category: 'Infra',
+    website: 'https://lido.fi',
+    description: 'Liquid staking protocol',
+    contractAddress: '0x5a98fcbea516cf06857215779fd812ca3bef1b32', // LDO
+    coingeckoId: 'lido-dao',
+  },
+  {
+    name: 'Chainlink',
+    chain: 'Ethereum',
+    category: 'Infra',
+    website: 'https://chain.link',
+    description: 'Decentralized oracle network',
+    contractAddress: '0x514910771af9ca656af840dff83e8264ecf986ca', // LINK
+    coingeckoId: 'chainlink',
+  },
+  {
+    name: 'MakerDAO',
+    chain: 'Ethereum',
+    category: 'DeFi',
+    website: 'https://makerdao.com',
+    description: 'Decentralized stablecoin issuer',
+    contractAddress: '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2', // MKR
+    coingeckoId: 'maker',
+  },
 ];
 
 interface ProjectImportData {
@@ -52,8 +92,6 @@ interface ProjectImportData {
   website: string;
   description: string;
   contractAddress?: string;
-  twitterHandle?: string;
-  githubRepo?: string;
   coingeckoId?: string;
 }
 
@@ -82,8 +120,6 @@ async function importProject(projectData: ProjectImportData) {
     console.log(`📊 Scoring ${projectData.name}...`);
     const scoringInputs: ScoringInputs = {
       contractAddress: projectData.contractAddress,
-      twitterHandle: projectData.twitterHandle,
-      githubRepo: projectData.githubRepo,
       coingeckoId: projectData.coingeckoId,
       chain: projectData.chain,
       projectStage: 'early', // Can be updated by user
@@ -100,15 +136,21 @@ async function importProject(projectData: ProjectImportData) {
       chain: projectData.chain,
       stage: 'early',
       website: projectData.website || null,
-      x_account: projectData.twitterHandle || null,
       description: projectData.description,
+      contract_address: projectData.contractAddress || null,
+      coingecko_id: projectData.coingeckoId || null,
+      product_status: 'live',
+      token_status: 'launched',
+      community_size: 0,
+      github_activity: 0,
+      liquidity_signals: 0,
       rug_risk_score: scores.rugRiskScore,
       legitimacy_score: scores.legitimacyScore,
       innovation_score: scores.innovationScore,
       survival_probability: scores.survivalProbability,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    }).select();
 
     if (projectError) throw projectError;
 
@@ -215,22 +257,6 @@ export async function clearAllData() {
   } catch (error) {
     console.error('❌ Clear error:', error);
     throw error;
-  }
-}
-
-// Run if called directly
-if (require.main === module) {
-  const command = process.argv[2];
-
-  if (command === '--clear') {
-    clearAllData().then(() => {
-      console.log('Ready to seed new data');
-      process.exit(0);
-    });
-  } else {
-    seedDatabase().then(() => {
-      process.exit(0);
-    });
   }
 }
 

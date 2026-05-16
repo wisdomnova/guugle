@@ -1,286 +1,188 @@
-# Guugle — Web3 Intelligence Platform
+# Guugle — Build with XAgent × OKX
 
-**Production-ready** platform for discovering, analyzing, and monitoring early-stage crypto projects with real-time risk scoring from blockchain, social, and development signals.
+Paste any contract address. Get the full intelligence picture before you ape.
 
-## 🚀 Overview
+Live rug risk scoring + OKX security pre-flight + smart money signals. No seed data. No static rankings. Every query hits Etherscan, CoinGecko, and the OKX skill suite.
 
-Guugle fetches **real data** from multiple sources to provide institutional-grade risk assessment:
-- **🔗 On-Chain Signals**: Smart contract analysis, holder distribution, transaction patterns (Etherscan/Solscan)
-- **🐦 Social Metrics**: Twitter engagement, community size, authenticity (Twitter API v2)
-- **💻 Dev Activity**: Code quality, commit frequency, repository health (GitHub API)
-- **💰 Market Data**: Token price, liquidity, exchange listings (CoinGecko)
-- **📊 Scoring**: Multi-factor algorithm combining all signals into risk scores
+Hackathon kicks off May 11, 2026. Node >= 18.17 required.
 
-## ✅ Production Features
+---
 
-✅ Real data integrations (not mock data)
-✅ Institutional-grade risk scoring algorithm
-✅ Background data sync jobs (automated daily updates)
-✅ REST API for programmatic access
-✅ Admin tools for project management
-✅ Health monitoring and error tracking
-✅ Rate limiting and API compliance
-✅ Supabase PostgreSQL with RLS
-✅ Next.js 16, React 19, TypeScript
+## What you get
 
-## 🏗️ Architecture
+Guugle is a token intelligence dashboard built on the OKX skill suite. Drop a contract address or token name into the analyze bar:
 
-### Tech Stack
-- **Frontend**: Next.js 16 (App Router), React 19, TypeScript 5
-- **Styling**: Tailwind CSS v4, Framer Motion
-- **Database**: Supabase PostgreSQL with Row-Level Security
-- **APIs**: Etherscan, Twitter v2, GitHub, CoinGecko
-- **Background Jobs**: Node.js (cron-based or queue system)
+- **Rug Risk Score** — holder concentration, liquidity depth, contract verification, deployer history
+- **Legitimacy Index** — market cap tier, exchange listings, on-chain age
+- **Innovation Delta** — trading volume momentum, unique holder growth
+- **OKX Security Widget** — honeypot detection, phishing dApp scan, token risk pre-flight (powered by `okx-security`)
+- **OKX Smart Money Widget** — KOL trade feeds, whale cluster signals, aggregated alpha (powered by `okx-dex-signal`)
+- **Market Intelligence** — live price, volume, OHLC, holder distribution (powered by `okx-market`)
 
-### Project Structure
+Every score is calculated live. No DB lookups for cached scores — every analysis is a fresh API call.
+
+---
+
+## How it fits together
+
 ```
-guugle/
-├── app/
-│   ├── page.tsx                    # Main dashboard
-│   ├── layout.tsx                  # Root layout
-│   ├── globals.css                 # Design tokens & Tailwind
-│   └── api/
-│       ├── projects/               # CRUD endpoints
-│       ├── search/                 # Full-text search
-│       ├── admin/
-│       │   ├── import-project/     # Manual project import
-│       │   └── sync-data/          # Trigger background jobs
-│       └── health/                 # Monitoring
-├── components/
-│   ├── ui/
-│   │   ├── discovery-dashboard.tsx
-│   │   ├── project-intelligence-card.tsx
-│   │   ├── project-report-modal.tsx
-│   │   └── design-tokens.ts
-│   └── ...
-├── lib/
-│   ├── integrations/
-│   │   ├── etherscan.ts           # On-chain data
-│   │   ├── twitter.ts             # Social metrics
-│   │   ├── github.ts              # Dev signals
-│   │   └── coingecko.ts           # Market data
-│   ├── scoring.ts                 # Risk scoring algorithm
-│   ├── background-jobs.ts         # Data sync jobs
-│   └── seed.ts                    # Project import/seeding
-└── sql/
-    └── intelligence-schema.sql    # Database schema
+              Guugle dashboard
+              (Next.js web UI)
+   ┌──────────────┼──────────────┐
+   │              │              │
+ Etherscan      OKX            CoinGecko
+ on-chain       skill          market
+ metrics        suite          data
+   ↑              ↑              ↑
+ contract      security /      price /
+ verification  smart money     volume /
+ holder count  signals         cap tier
 ```
 
-## 🧠 Scoring Algorithm
+| Layer | Owned by | What it does | What Guugle does |
+|---|---|---|---|
+| **Identity** | XAgent | Registers hackathon participants | You run `xagt-plugin login` once |
+| **Intelligence** | OKX skill suite | Security scans, smart money feeds, market data | Guugle calls `okx-security`, `okx-dex-signal`, `okx-market` on every analyze |
+| **On-Chain** | Etherscan | Contract verification, holder distribution, tx history | Guugle fetches live metrics via Etherscan API |
+| **Market** | CoinGecko | Token price, volume, market cap, exchange listings | Guugle enriches scores with CoinGecko Pro API |
+| **Product** | You | UX, scoring algorithm, dashboard, modal | Guugle combines all 4 layers into one intelligence view |
 
-Guugle uses **real data** from multiple sources to calculate risk scores:
+A finished hackathon project uses all layers. Guugle wires them together — you deploy and submit.
 
-### Rug Risk Score (0-100, higher = riskier)
-- Contract verification status
-- Holder distribution and concentration
-- Transaction patterns
-- Deployer wallet history
-- Lock duration and mechanisms
+---
 
-### Legitimacy Score (0-100)
-- GitHub activity and contributor count (40%)
-- Code quality and test coverage (25%)
-- Twitter verification and engagement (20%)
-- On-chain signals (15%)
+## Product shape
 
-### Innovation Score (0-100)
-- Code complexity and uniqueness
-- Development velocity
-- Repository popularity (stars/forks)
+**Rug-proof intelligence dashboard** — user pastes any contract address; Guugle runs live scoring (Etherscan + CoinGecko) + OKX security pre-flight; honeypots and low-legitimacy tokens flagged before user buys; full intelligence modal shows smart money signals via `okx-dex-signal`.
 
-### Survival Probability (0-100)
-- Weighted combination of all factors
-- Predicts likelihood of 12+ month survival
+Similar to the "Rug-proof Swap Frontend" seed idea, but analytics-first instead of swap-first.
 
-## 📡 API Endpoints
+---
 
-### Projects
-```
-GET  /api/projects                 # List all projects (paginated)
-POST /api/projects                 # Create project
-GET  /api/projects/:id             # Get project details
-PATCH /api/projects/:id            # Update scores
-DELETE /api/projects/:id           # Delete project
-```
-
-### Search & Filter
-```
-GET /api/search?q=uniswap          # Full-text search
-GET /api/projects?category=DeFi&chain=Ethereum&sort=rug-risk
-```
-
-### Admin
-```
-POST /api/admin/import-project     # Import with real data scoring
-POST /api/admin/sync-data          # Trigger background update
-GET /api/health                    # Check system status
-```
-
-**See [API_REFERENCE.md](API_REFERENCE.md) for full documentation**
-
-## 🚀 Getting Started
-
-### 1. Prerequisites
-- Node.js 18+
-- npm or pnpm
-- Supabase account (https://supabase.com)
-- API keys for data sources (see PRODUCTION.md)
-
-### 2. Installation
+## Run it locally
 
 ```bash
-# Clone and install
-git clone <repo>
+git clone https://github.com/<you>/guugle
 cd guugle
 npm install
-
-# Copy environment template
-cp .env.local.example .env.local
-
-# Edit .env.local with your API keys and Supabase credentials
-# See PRODUCTION.md for detailed setup instructions
-```
-
-### 3. Run Locally
-
-```bash
-# Start dev server
+cp .env.local.example .env.local   # fill in your keys
 npm run dev
-
-# Open http://localhost:3000
+# open http://localhost:3000
 ```
 
-### 4. Import First Project
+Required env vars:
 
 ```bash
-# Get JOB_SECRET from .env.local
-JOB_SECRET="..."
-
-# Import a real project
-curl -X POST http://localhost:3000/api/admin/import-project \
-  -H "Authorization: Bearer $JOB_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Uniswap",
-    "chain": "Ethereum",
-    "category": "DeFi",
-    "website": "https://uniswap.org",
-    "description": "Decentralized exchange",
-    "contractAddress": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
-    "twitterHandle": "Uniswap",
-    "githubRepo": "Uniswap/v3-core",
-    "coingeckoId": "uniswap"
-  }'
-
-# Projects will be scored with real data!
+NEXT_PUBLIC_SUPABASE_URL=https://wfnhyoidvpjkdspasnud.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+ETHERSCAN_API_KEY=<your-etherscan-key>
+COINGECKO_API_KEY=<your-coingecko-pro-key>
 ```
 
-### 5. Trigger Data Sync
+Then paste a contract address or token name into the analyze bar:
+
+```
+0x1f9840a85d5af5bf1d1762f925bdaddc4201f984   # Uniswap
+0x514910771af9ca656af840dff83e8264ecf986ca   # Chainlink
+PEPE                                          # name search works too
+```
+
+Hit Enter. Scores appear in ~2 seconds. Click **View Full Intelligence Report** to see OKX widgets.
+
+---
+
+## Eligibility
+
+✅ Registered via `xagt-plugin setup --target all` (or `xagt-plugin login`)  
+✅ Uses OKX skill suite (`okx-security`, `okx-dex-signal`, `okx-market`)  
+✅ Public GitHub repo with source code  
+✅ One-line description: "Paste any CA, get live rug risk + legitimacy + innovation scores + OKX intelligence"
+
+Optional but encouraged:
+- Deployed demo URL (Vercel, Railway, Render, etc.)
+- Demo video / GIF showing the analyze flow
+
+---
+
+## Submit
+
+One command:
 
 ```bash
-# Update all project scores
-curl -X POST http://localhost:3000/api/admin/sync-data \
-  -H "Authorization: Bearer $JOB_SECRET"
+xagt-plugin submit
 ```
-## 📚 Documentation
 
-- **[PRODUCTION.md](PRODUCTION.md)** — Complete setup guide for production deployment
-- **[API_REFERENCE.md](API_REFERENCE.md)** — API endpoints, examples, and integration guide
-- **[.env.local.example](.env.local.example)** — Environment variables template
+Asks you for:
 
-## 🔐 Production Setup Checklist
+```
+  Project name:           Guugle
+  One-line description:   Paste any CA, get live rug risk + legitimacy + innovation scores + OKX intelligence
+  GitHub repo URL:        https://github.com/<you>/guugle
+  Deployed URL (optional, blank to skip): https://guugle.vercel.app
+```
 
-- [ ] Configure all API keys (see PRODUCTION.md)
-- [ ] Set up Supabase project and credentials
-- [ ] Configure environment variables in production
-- [ ] Set up automated data sync cron job
-- [ ] Configure error tracking (Sentry)
-- [ ] Set up email alerts (SendGrid)
-- [ ] Test health endpoint (`/api/health`)
-- [ ] Import test projects with real data
-- [ ] Verify scoring algorithm output
-- [ ] Set up database backups
-- [ ] Configure monitoring dashboard
-- [ ] Deploy to production
+Then your browser opens GitHub at the right URL with the submission file pre-filled. Click **Propose new file** → GitHub forks `xerpa-ai/xagt-plugin` to your account and opens the PR for you. Click **Create pull request** and you're done.
 
-## 🛠️ Development Commands
+The file lands at `projects/<your-participant-id>/README.md`. Judges merge accepted submissions.
+
+Or scripted (CI / Makefile):
 
 ```bash
-npm run dev              # Start development server
-npm run build            # Build for production
-npm start                # Start production server
-npm run lint             # Run TypeScript check
-npm run type-check       # Type checking
-
-# Testing APIs locally
-curl http://localhost:3000/api/health
-curl http://localhost:3000/api/projects?limit=5
-curl "http://localhost:3000/api/search?q=defi"
+xagt-plugin submit \
+  --name "Guugle" \
+  --intro "Paste any CA, get live rug risk + legitimacy + innovation scores + OKX intelligence" \
+  --repo "https://github.com/<you>/guugle" \
+  --deploy "https://guugle.vercel.app"
 ```
 
-## 📊 Data Flow
+Lost your local credentials? Run `xagt-plugin login` again with the same XAgent account — your participant ID stays stable, so your existing submission folder stays yours.
+
+---
+
+## Get help
+
+In-person at the venue. No Discord, no Telegram. Pull a mentor over.
+
+---
+
+## Reference
+
+### API Endpoints
 
 ```
-Real Data Sources
-  │
-  ├─ Etherscan (On-chain)
-  ├─ Twitter (Social)
-  ├─ GitHub (Development)
-  └─ CoinGecko (Market)
-        │
-        ▼
-Background Job (Daily)
-  • Fetch all data for each project
-  • Run scoring algorithm
-  • Calculate risk metrics
-  • Store in database
-        │
-        ▼
-API Layer
-  • /api/projects (list/search)
-  • /api/admin/* (admin ops)
-  • /api/health (monitoring)
-        │
-        ▼
-Frontend Dashboard
-  • Display projects
-  • Show risk scores
-  • Filter and search
+GET /api/analyze?q=<address or name>    # live scoring, no DB required
+GET /api/projects                       # stored projects list
+GET /api/search?q=<query>               # full-text search
+GET /api/health                         # system status
 ```
 
-## ⚠️ Rate Limits
+### Stack
 
-**Guugle respects all API rate limits:**
+- **Next.js 16** (App Router, Turbopack)
+- **React 19**, TypeScript
+- **Tailwind CSS v4**, Framer Motion
+- **Supabase** PostgreSQL
+- **Etherscan** API — on-chain metrics
+- **CoinGecko Pro** API — market data
+- **OKX skill suite** — `okx-security`, `okx-dex-signal`, `okx-market`
 
-| Source | Limit |
-|--------|-------|
-| Etherscan | 5 calls/sec |
-| Twitter | 300 calls/15 min |
-| GitHub | 5,000 calls/hour |
-| CoinGecko | 10-50 calls/min |
+### XAgent Identity
 
-**Solution:** Background jobs process 1 project per second with rate limiting
+```bash
+xagt-plugin login      # register / switch accounts
+xagt-plugin doctor     # check session + runtime status
+xagt-plugin logout     # clear local credentials
+```
 
-## 🐛 Troubleshooting
+Credentials live at `~/.config/xagt/credentials.json` (`%APPDATA%\xagt\credentials.json` on Windows), chmod 600.
 
-**Problem:** "Unauthorized" on admin endpoints
-- Solution: Check `Authorization: Bearer $JOB_SECRET` header is set
-- Get secret from `.env.local`
+---
 
-**Problem:** Projects not updating
-- Solution: Manually trigger sync:
-  ```bash
-  curl -X POST http://localhost:3000/api/admin/sync-data \
-    -H "Authorization: Bearer $JOB_SECRET"
-  ```
+## Troubleshooting
 
-**Problem:** Health check shows services unhealthy
-- Solution: Verify API keys are valid and configured
-- Check Sentry dashboard for errors
-- Review Supabase connection string
-
-**See PRODUCTION.md for more troubleshooting**
-
-## 📝 License
-
-MIT
+| Symptom | Fix |
+|---|---|
+| `npm run dev` fails with Supabase errors | Check `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` |
+| Analyze returns "Analysis failed" | Check `ETHERSCAN_API_KEY` and `COINGECKO_API_KEY` in `.env.local` |
+| OKX widgets show "No data" | Ensure you've run `xagt-plugin setup --target all` to install OKX skills |
+| Build fails with TypeScript errors | Run `npm run build` to see full error trace |

@@ -1,17 +1,13 @@
 /**
- * Risk Scoring Algorithm
- * Calculates institutional-grade risk assessments using real data
+ * Risk Scoring Algorithm - SIMPLIFIED FOR SPEED
+ * On-chain only: Etherscan + CoinGecko
  */
 
-import { getContractInfo, analyzeOnChainMetrics } from './integrations/etherscan';
-import { getTwitterMetrics } from './integrations/twitter';
-import { getGitHubMetrics, analyzeCodeQuality } from './integrations/github';
-import { getMarketData, checkExchangeListing } from './integrations/coingecko';
+import { analyzeOnChainMetrics } from './integrations/etherscan';
+import { getMarketData } from './integrations/coingecko';
 
 export interface ScoringInputs {
   contractAddress?: string;
-  twitterHandle?: string;
-  githubRepo?: string;
   coingeckoId?: string;
   chain: string;
   projectStage: 'presale' | 'launch' | 'early' | 'growth' | 'mature';
@@ -37,7 +33,7 @@ export interface ScoringResults {
 /**
  * Calculate rug pull risk based on on-chain signals
  */
-function calculateRugRiskScore(onChainData: any): {
+function calculateRugRiskScore(onChainData: any, marketData: any): {
   score: number;
   flags: ScoringResults['redFlags'];
 } {
@@ -48,22 +44,18 @@ function calculateRugRiskScore(onChainData: any): {
     return { score: 50, flags: [{ flag: 'No on-chain data', severity: 'high', evidence: 'Contract not verified' }] };
   }
 
-  // Check holder concentration
+  // Holder concentration — only flag if market data also absent (prevents false positives on major tokens)
   const uniqueHolders = onChainData.uniqueHolders || 0;
-  if (uniqueHolders < 50) {
+  const hasMarketCap = marketData?.marketCap && marketData.marketCap > 500000;
+  if (uniqueHolders < 50 && !hasMarketCap) {
     riskScore += 35;
-    flags.push({
-      flag: 'Low holder count',
-      severity: 'critical',
-      evidence: `Only ${uniqueHolders} unique holders detected`,
-    });
-  } else if (uniqueHolders < 500) {
+    flags.push({ flag: 'Low holder count', severity: 'critical', evidence: `Only ${uniqueHolders} unique holders detected` });
+  } else if (uniqueHolders > 0 && uniqueHolders < 500 && !hasMarketCap) {
     riskScore += 15;
-    flags.push({
-      flag: 'Concentrated holders',
-      severity: 'high',
-      evidence: `${uniqueHolders} holders suggests concentration risk`,
-    });
+    flags.push({ flag: 'Concentrated holders', severity: 'high', evidence: `${uniqueHolders} holders suggests concentration risk` });
+  } else if (uniqueHolders === 0 && !hasMarketCap) {
+    riskScore += 20;
+    flags.push({ flag: 'No holder data', severity: 'medium', evidence: 'Unable to verify holder distribution' });
   }
 
   // Check transaction patterns
@@ -111,186 +103,145 @@ function calculateRugRiskScore(onChainData: any): {
     });
   }
 
-  return { score: Math.min(100, riskScore), flags };
+  // Market cap is a strong rug-protection signal
+  if (marketData?.marketCap) {
+    if (marketData.marketCap > 1e9) riskScore = Math.max(0, riskScore - 30); // >$1B: very low risk
+    else if (marketData.marketCap > 1e8) riskScore = Math.max(0, riskScore - 20); // >$100M
+    else if (marketData.marketCap > 1e7) riskScore = Math.max(0, riskScore - 10); // >$10M
+  }
+
+  return { score: Math.min(100, Math.max(0, riskScore)), flags };
 }
 
 /**
- * Calculate legitimacy score from multiple signals
+ * Calculate legitimacy score from ON-CHAIN SIGNALS ONLY
  */
-function calculateLegitimacyScore(data: {
-  github?: any;
-  twitter?: any;
-  codeQuality?: any;
-  onChain?: any;
-}): {
+function calculateLegitimacyScore(onChainData: any, marketData: any): {
   score: number;
   signals: ScoringResults['positiveSignals'];
 } {
-  let score = 0;
+  let score = 50; // Base score
   const signals: ScoringResults['positiveSignals'] = [];
 
-  // GitHub signals (40% weight)
-  if (data.github) {
-    const gitScore = Math.min(100, (data.github.starCount || 0) + (data.github.contributorCount || 0) * 2);
-    score += gitScore * 0.4;
+  if (!onChainData) return { score, signals };
 
-    if (data.github.lastCommitDate) {
-      const daysSinceCommit = (Date.now() - data.github.lastCommitDate.getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSinceCommit < 30) {
-        signals.push({
-          signal: 'Active development',
-          strength: 'strong',
-          evidence: `Last commit ${Math.floor(daysSinceCommit)} days ago`,
-        });
-      }
-    }
-
-    if (data.github.commitCount > 100) {
-      signals.push({
-        signal: 'Substantial codebase',
-        strength: 'strong',
-        evidence: `${data.github.commitCount} commits in repository`,
-      });
-    }
-  }
-
-  // Code quality signals (25% weight)
-  if (data.codeQuality) {
-    score += data.codeQuality.qualityScore * 0.25;
-
-    if (data.codeQuality.hasTests) {
-      signals.push({
-        signal: 'Test coverage present',
-        strength: 'medium',
-        evidence: 'Repository includes test suite',
-      });
-    }
-
-    if (data.codeQuality.hasDocumentation) {
-      signals.push({
-        signal: 'Well documented',
-        strength: 'medium',
-        evidence: 'Project has comprehensive documentation',
-      });
-    }
-  }
-
-  // Twitter signals (20% weight)
-  if (data.twitter) {
-    const twitterScore = Math.min(100, (data.twitter.followersCount / 10000) * 100);
-    score += twitterScore * 0.2;
-
-    if (data.twitter.isVerified) {
-      signals.push({
-        signal: 'Verified Twitter account',
-        strength: 'strong',
-        evidence: 'Official account verified by Twitter',
-      });
-    }
-
-    if (data.twitter.engagementRate > 0.05) {
-      signals.push({
-        signal: 'Strong community engagement',
-        strength: 'medium',
-        evidence: `${(data.twitter.engagementRate * 100).toFixed(2)}% engagement rate`,
-      });
-    }
-  }
-
-  // On-chain signals (15% weight)
-  if (data.onChain && data.onChain.uniqueHolders > 1000) {
+  // Holder distribution (positive signal)
+  if (onChainData.uniqueHolders > 1000) {
+    score += 25;
     signals.push({
       signal: 'Wide holder distribution',
       strength: 'strong',
-      evidence: `${data.onChain.uniqueHolders} unique token holders`,
+      evidence: `${onChainData.uniqueHolders} unique token holders`,
     });
+  } else if (onChainData.uniqueHolders > 100) {
+    score += 10;
+  }
+
+  // Contract verification
+  if (onChainData.isVerified) {
+    score += 15;
+    signals.push({
+      signal: 'Verified contract',
+      strength: 'strong',
+      evidence: 'Source code publicly verified on-chain',
+    });
+  }
+
+  // Exchange listing
+  if (marketData?.listedExchanges && marketData.listedExchanges > 3) {
+    score += 15;
+    signals.push({
+      signal: 'Multi-exchange listing',
+      strength: 'strong',
+      evidence: `Available on ${marketData.listedExchanges} major exchanges`,
+    });
+  }
+
+  // Market cap tiers drive legitimacy meaningfully
+  if (marketData?.marketCap) {
+    if (marketData.marketCap > 1e9) {
+      score += 35;
+      signals.push({ signal: 'Blue-chip market cap', strength: 'strong', evidence: `$${(marketData.marketCap / 1e9).toFixed(1)}B market cap` });
+    } else if (marketData.marketCap > 1e8) {
+      score += 20;
+      signals.push({ signal: 'Established market cap', strength: 'strong', evidence: `$${(marketData.marketCap / 1e6).toFixed(0)}M market cap` });
+    } else if (marketData.marketCap > 1e7) {
+      score += 10;
+      signals.push({ signal: 'Established market cap', strength: 'medium', evidence: `$${(marketData.marketCap / 1e6).toFixed(1)}M market cap` });
+    }
   }
 
   return { score: Math.min(100, score), signals };
 }
 
 /**
- * Calculate innovation score
+ * Calculate innovation score (market-based proxy for adoption)
  */
-function calculateInnovationScore(data: {
-  github?: any;
-  codeQuality?: any;
-  projectDescription?: string;
-}): number {
-  let score = 0;
+function calculateInnovationScore(marketData: any, chain: string): number {
+  let score = 50; // Base score
 
-  // Code quality indicator of innovation
-  if (data.codeQuality?.qualityScore) {
-    score += data.codeQuality.qualityScore * 0.5;
+  if (!marketData) return score;
+
+  // Active trading indicates adoption
+  if (marketData?.volume24h) {
+    if (marketData.volume24h > 1e8) score += 30;
+    else if (marketData.volume24h > 1e7) score += 20;
+    else if (marketData.volume24h > 1e6) score += 10;
   }
 
-  // GitHub stars/activity indicator
-  if (data.github?.starCount) {
-    score += Math.min(50, (data.github.starCount / 1000) * 50);
+  // Holding value indicates sustainability
+  if (marketData?.allTimeHigh && marketData.currentPrice) {
+    const uptake = (marketData.currentPrice / marketData.allTimeHigh) * 100;
+    if (uptake > 50) {
+      score += 15;
+    }
   }
 
-  // Recent commits indicate active development
-  if (data.github?.developmentVelocity) {
-    score += Math.min(20, data.github.developmentVelocity * 5);
+  // Established chain bonus
+  if (chain.toLowerCase() === 'ethereum' || chain.toLowerCase() === 'solana') {
+    score += 5;
   }
 
   return Math.min(100, score);
 }
 
 /**
- * Calculate survival probability
+ * Calculate survival probability (simplified)
  */
 function calculateSurvivalProbability(data: {
   legitimacy: number;
   innovation: number;
   rugRisk: number;
-  githubActivity: number;
-  twitterFollowers: number;
 }): number {
-  // Weighted combination
-  const legitimacyFactor = data.legitimacy * 0.35;
-  const innovationFactor = data.innovation * 0.25;
-  const rugRiskFactor = (100 - data.rugRisk) * 0.25;
-  const activityFactor = Math.min(100, data.githubActivity * 2 + data.twitterFollowers / 5000) * 0.15;
+  const legitimacyFactor = data.legitimacy * 0.5;
+  const innovationFactor = data.innovation * 0.2;
+  const rugRiskFactor = (100 - data.rugRisk) * 0.3;
 
-  return Math.round(legitimacyFactor + innovationFactor + rugRiskFactor + activityFactor);
+  return Math.round(legitimacyFactor + innovationFactor + rugRiskFactor);
 }
 
 /**
- * Main scoring function
+ * Main scoring - ON-CHAIN ONLY (fast)
  */
 export async function scoreProject(
   projectName: string,
   inputs: ScoringInputs
 ): Promise<ScoringResults> {
   try {
-    // Fetch all data in parallel
-    const [onChainData, twitterData, githubData, marketData, codeQuality] = await Promise.all([
+    // Fetch only: on-chain + market data (no social APIs)
+    const [onChainData, marketData] = await Promise.all([
       inputs.contractAddress ? analyzeOnChainMetrics(inputs.contractAddress) : Promise.resolve(null),
-      inputs.twitterHandle ? getTwitterMetrics(inputs.twitterHandle) : Promise.resolve(null),
-      inputs.githubRepo ? getGitHubMetrics(...(inputs.githubRepo.split('/') as [string, string])) : Promise.resolve(null),
       inputs.coingeckoId ? getMarketData(inputs.coingeckoId) : Promise.resolve(null),
-      inputs.githubRepo ? analyzeCodeQuality(...(inputs.githubRepo.split('/') as [string, string])) : Promise.resolve(null),
     ]);
 
     // Calculate scores
-    const { score: rugRisk, flags: redFlags } = calculateRugRiskScore(onChainData);
-    const { score: legitimacy, signals: positiveSignals } = calculateLegitimacyScore({
-      github: githubData,
-      twitter: twitterData,
-      codeQuality: codeQuality,
-      onChain: onChainData,
-    });
-    const innovation = calculateInnovationScore({
-      github: githubData,
-      codeQuality: codeQuality,
-    });
+    const { score: rugRisk, flags: redFlags } = calculateRugRiskScore(onChainData, marketData);
+    const { score: legitimacy, signals: positiveSignals } = calculateLegitimacyScore(onChainData, marketData);
+    const innovation = calculateInnovationScore(marketData, inputs.chain);
     const survival = calculateSurvivalProbability({
       legitimacy,
       innovation,
       rugRisk,
-      githubActivity: githubData?.developmentVelocity || 0,
-      twitterFollowers: twitterData?.followersCount || 0,
     });
 
     return {
@@ -303,7 +254,6 @@ export async function scoreProject(
     };
   } catch (error) {
     console.error(`Error scoring project ${projectName}:`, error);
-    // Return neutral scores on error
     return {
       rugRiskScore: 50,
       legitimacyScore: 50,
@@ -313,7 +263,7 @@ export async function scoreProject(
         {
           flag: 'Scoring error',
           severity: 'medium',
-          evidence: 'Unable to fetch all data sources for complete assessment',
+          evidence: 'Unable to fetch on-chain data',
         },
       ],
       positiveSignals: [],

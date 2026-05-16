@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { AppShell } from '@/components/ui/app-shell';
 import { DiscoveryDashboard } from '@/components/ui/discovery-dashboard';
 import { ProjectReportModal } from '@/components/ui/project-report-modal';
 import { ProjectIntelligence } from '@/components/ui/project-intelligence-card';
+import { AlertTriangle } from 'lucide-react';
 
 export default function Home() {
   const [projects, setProjects] = useState<ProjectIntelligence[]>([]);
@@ -31,7 +33,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main>
+    <AppShell>
       <DiscoveryDashboard
         projects={projects}
         onProjectSelect={setSelectedProject}
@@ -43,10 +45,11 @@ export default function Home() {
         onClose={() => setSelectedProject(null)}
       />
       {error && (
-        <div className="fixed bottom-4 right-4 p-4 rounded-lg" style={{ background: '#fee2e2', color: '#7f1d1d' }}>
-          {error}
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg border chip-danger shadow-lg max-w-sm">
+          <AlertTriangle size={14} />
+          <span className="text-sm">{error}</span>
         </div>
       )}
-    </main>
+    </AppShell>
   );
 }

@@ -17,11 +17,8 @@ export async function GET() {
     checks: {
       supabase: false,
       etherscan: !!process.env.ETHERSCAN_API_KEY,
-      twitter: !!process.env.TWITTER_BEARER_TOKEN,
-      github: !!process.env.GITHUB_TOKEN,
-      coingecko: true, // Free tier, always available
-      sendgrid: !!process.env.SENDGRID_API_KEY,
-      sentry: !!process.env.SENTRY_AUTH_TOKEN,
+      coingecko: !!process.env.COINGECKO_PRO_API_KEY,
+      okx: true, // OKX configured via xagt-plugin
     },
   };
 

@@ -94,45 +94,34 @@ export async function getLiquiditySignals(contractAddress: string): Promise<Liqu
 export async function analyzeOnChainMetrics(contractAddress: string): Promise<OnChainMetrics> {
   try {
     if (!ETHERSCAN_API_KEY) {
-      return {
-        transactionCount: 0,
-        uniqueHolders: 0,
-        largeTransactions: 0,
-        rugPullIndicators: 0,
-      };
+      return { transactionCount: 0, uniqueHolders: 0, largeTransactions: 0, rugPullIndicators: 0 };
     }
 
-    // Get token transfers
-    const response = await fetch(
-      `${ETHERSCAN_BASE_URL}?module=account&action=tokentx&contractaddress=${contractAddress}&sort=asc&apikey=${ETHERSCAN_API_KEY}`
-    );
+    // Fetch holder count + contract verification in parallel
+    const [holderRes, contractRes] = await Promise.all([
+      fetch(`${ETHERSCAN_BASE_URL}?module=token&action=tokenholdercount&contractaddress=${contractAddress}&apikey=${ETHERSCAN_API_KEY}`),
+      fetch(`${ETHERSCAN_BASE_URL}?module=contract&action=getabi&address=${contractAddress}&apikey=${ETHERSCAN_API_KEY}`),
+    ]);
 
-    const data = await response.json();
-    const transfers = data.result || [];
+    const holderData = await holderRes.json();
+    const contractData = await contractRes.json();
 
-    // Calculate metrics
-    const uniqueHolders = new Set(transfers.map((t: any) => t.to)).size;
-    const largeTransactions = transfers.filter((t: any) => parseInt(t.value) > 1e18).length;
+    // holdercount returns a numeric string on success
+    const holderCount = typeof holderData.result === 'string' && /^\d+$/.test(holderData.result)
+      ? parseInt(holderData.result, 10)
+      : 0;
 
-    // Simple rug pull indicators
-    let rugPullIndicators = 0;
-    if (largeTransactions > transfers.length * 0.3) rugPullIndicators++; // Many large transactions
-    if (uniqueHolders < 10) rugPullIndicators++; // Very few holders
-    if (transfers.length === 0) rugPullIndicators++; // No activity
+    const isVerified = contractData.status === '1' && typeof contractData.result === 'string' && contractData.result.length > 10;
 
     return {
-      transactionCount: transfers.length,
-      uniqueHolders,
-      largeTransactions,
-      rugPullIndicators,
-    };
+      transactionCount: holderCount > 0 ? holderCount : 0,
+      uniqueHolders: holderCount,
+      largeTransactions: 0,
+      rugPullIndicators: holderCount < 10 ? 1 : 0,
+      isVerified,
+    } as any;
   } catch (error) {
     console.error('On-chain metrics error:', error);
-    return {
-      transactionCount: 0,
-      uniqueHolders: 0,
-      largeTransactions: 0,
-      rugPullIndicators: 0,
-    };
+    return { transactionCount: 0, uniqueHolders: 0, largeTransactions: 0, rugPullIndicators: 0 };
   }
 }

@@ -1,9 +1,12 @@
 'use client';
 
+import type { ComponentType } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ExternalLink, Shield, Target, Activity, Share2, Globe, Code } from 'lucide-react';
+import { X, ExternalLink, Shield, Target, Share2, Globe, Code } from 'lucide-react';
 import { ProjectIntelligence } from './project-intelligence-card';
 import { designTokens } from './design-tokens';
+import { OKXSecurityWidget } from './okx-security-widget';
+import { OKXSmartMoneyWidget } from './okx-smart-money-widget';
 
 interface ProjectReportModalProps {
   project: ProjectIntelligence | null;
@@ -17,125 +20,117 @@ export function ProjectReportModal({ project, isOpen, onClose }: ProjectReportMo
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-3 md:p-4 lg:p-12 overflow-hidden">
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 lg:p-10 overflow-hidden">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-[#0a0a0b]/80 backdrop-blur-2xl"
+            className="absolute inset-0 bg-black/70 backdrop-blur-md"
             onClick={onClose}
           />
 
-          {/* Modal Container */}
           <motion.div
-            initial={{ opacity: 0, y: 100, scale: 0.98 }}
+            initial={{ opacity: 0, y: 40, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 100, scale: 0.98 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="relative w-full max-w-6xl h-full max-h-[92vh] sm:max-h-[90vh] md:max-h-[900px] bg-white rounded-lg md:rounded-2xl shadow-3xl flex flex-col overflow-y-auto"
+            exit={{ opacity: 0, y: 40, scale: 0.98 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+            className="relative w-full max-w-5xl max-h-[92vh] card-elevated flex flex-col overflow-hidden border-[var(--color-border-glow)] shadow-[var(--shadow-lg)]"
           >
-            {/* Minimalist Top Bar */}
-            <div className="flex items-center justify-between px-3 sm:px-4 md:px-8 py-3 md:py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-              <div className="flex items-center gap-1 sm:gap-2 md:gap-4 min-w-0">
-                <span className="text-label text-gray-400 text-xs md:text-sm">Intelligence Briefing</span>
-                <span className="w-1 h-1 rounded-full bg-gray-200 flex-shrink-0" />
-                <span className="text-label text-indigo-600 text-xs md:text-sm truncate">ID: {project.id.slice(0, 8)}</span>
+            <div className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-[var(--color-border)] sticky top-0 bg-[var(--color-bg-elevated)] z-10">
+              <div className="flex items-center gap-2 min-w-0 text-xs font-mono uppercase tracking-wider">
+                <span className="text-[var(--color-text-muted)]">Intelligence Briefing</span>
+                <span className="w-1 h-1 rounded-full bg-[var(--color-border)]" />
+                <span className="text-[var(--color-accent)] truncate">ID: {project.id.slice(0, 8)}</span>
               </div>
-              <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-                <button className="p-2 text-gray-400 hover:text-gray-900 transition-colors cursor-pointer"><Share2 size={16}/></button>
-                <button 
+              <div className="flex items-center gap-1">
+                <button className="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors cursor-pointer">
+                  <Share2 size={16} />
+                </button>
+                <button
                   onClick={onClose}
-                  className="p-2 ml-1 md:ml-2 text-gray-900 hover:bg-gray-50 rounded-full transition-all cursor-pointer"
+                  className="p-2 text-[var(--color-text-primary)] hover:bg-[var(--color-bg-accent)] rounded-lg transition-all cursor-pointer"
                 >
                   <X size={20} />
                 </button>
               </div>
             </div>
 
-            {/* Split Layout: Narrative & Data - Stacks on mobile, side-by-side on lg */}
-            <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-y-visible">
-              
-              {/* Left Column: Core Identity (Editorial) */}
-              <div className="w-full lg:w-[45%] p-4 sm:p-6 md:p-10 lg:p-20 space-y-6 sm:space-y-8 md:space-y-12 lg:border-r border-gray-100 flex flex-col justify-start">
-                <div className="space-y-4 sm:space-y-6 md:space-y-8">
-                  <div className="inline-block px-3 py-1 rounded-full bg-gray-900 text-white text-label text-xs md:text-sm">
-                    {project.category}
-                  </div>
-                  <h2 
-                    className="font-bold tracking-tighter leading-[0.95] text-gray-950 text-lg sm:text-xl md:text-2xl"
+            <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto">
+              <div className="w-full lg:w-[42%] p-6 md:p-10 space-y-8 lg:border-r border-[var(--color-border)]">
+                <div className="space-y-6">
+                  <span className="badge">{project.category}</span>
+                  <h2
+                    className="font-bold tracking-tight text-[var(--color-text-primary)]"
                     style={{ fontSize: designTokens.typography.sizes['2xl'] }}
                   >
                     {project.name}
                   </h2>
-                  <p className="text-body text-gray-500 max-w-md text-xs sm:text-sm md:text-base leading-relaxed">
-                    Comprehensive intelligence synthesis for {project.name}. Analyzed across technical, social, and liquidity vectors to determine survival probability and technological impact.
+                  <p className="text-body text-sm leading-relaxed">
+                    Comprehensive intelligence synthesis across technical, social, and liquidity
+                    vectors for survival probability and risk surface.
                   </p>
                 </div>
-
-                <div className="flex flex-wrap gap-2 sm:gap-3 md:gap-4">
+                <div className="flex flex-wrap gap-2">
                   <ExternalLinkButton icon={Globe} href={project.website} label="Website" />
                   <ExternalLinkButton icon={Code} href="#" label="Repository" />
                 </div>
               </div>
 
-              {/* Right Column: Intelligence Metrics (Archival) */}
-              <div className="flex-1 bg-gray-50/50 p-4 sm:p-6 md:p-10 lg:p-16 space-y-8 sm:space-y-10 md:space-y-12 lg:space-y-16">
-                
-                {/* Score Grid */}
-                <div className="grid grid-cols-2 gap-4 sm:gap-6 md:gap-8 lg:gap-12">
-                  <ReportMetric 
-                    label="Legitimacy Index" 
-                    value={project.legitimacyScore} 
-                    subtext="On-chain & social verification delta" 
+              <div className="flex-1 p-6 md:p-10 space-y-10 bg-[var(--color-bg-primary)]">
+                <div className="grid grid-cols-2 gap-6 md:gap-10">
+                  <ReportMetric
+                    label="Legitimacy Index"
+                    value={project.legitimacyScore}
+                    subtext="On-chain & social verification"
                   />
-                  <ReportMetric 
-                    label="Innovation Delta" 
-                    value={project.innovationScore} 
-                    subtext="Codebase uniqueness & tech impact" 
+                  <ReportMetric
+                    label="Innovation Delta"
+                    value={project.innovationScore}
+                    subtext="Codebase uniqueness & impact"
                   />
-                  <ReportMetric 
-                    label="Risk Surface" 
-                    value={project.rugRiskScore} 
-                    isRisk 
-                    subtext="Consolidated attack surface analysis" 
+                  <ReportMetric
+                    label="Risk Surface"
+                    value={project.rugRiskScore}
+                    isRisk
+                    subtext="Consolidated attack surface"
                   />
-                  <ReportMetric 
-                    label="Momentum" 
-                    value={Math.round(project.communitySize / 1000)} 
-                    subtext="Normalized network growth (k)" 
+                  <ReportMetric
+                    label="Momentum"
+                    value={Math.round(project.communitySize / 1000)}
+                    subtext="Network growth (k)"
                   />
                 </div>
 
-                {/* Signals Matrix */}
-                <div className="space-y-4 sm:space-y-5 md:space-y-6 lg:space-y-8">
-                  <h3 className="text-label text-gray-400 text-xs md:text-sm">Intelligence Signals</h3>
-                  <div className="grid grid-cols-1 gap-2 sm:gap-3 md:gap-4">
+                <div className="space-y-4">
+                  <h3 className="text-label">Intelligence Signals</h3>
+                  <div className="grid grid-cols-1 gap-2">
                     {project.positiveSignals.map((sig, i) => (
-                      <SignalItem key={i} type="positive" text={sig} />
+                      <SignalItem key={`p-${i}`} type="positive" text={sig} />
                     ))}
                     {project.redFlags.map((flag, i) => (
-                      <SignalItem key={i} type="negative" text={flag} />
+                      <SignalItem key={`n-${i}`} type="negative" text={flag} />
                     ))}
                   </div>
                 </div>
 
-                {/* Technical Footprint */}
-                <div className="pt-4 sm:pt-5 md:pt-6 lg:pt-8 border-t border-gray-200 grid grid-cols-3 gap-3 sm:gap-4 md:gap-8">
+                <div className="space-y-4">
+                  <h3 className="text-label">On-Chain Intelligence</h3>
+                  <div className="space-y-3">
+                    <OKXSecurityWidget tokenAddress={project.id} chain={project.chain} />
+                    <OKXSmartMoneyWidget tokenAddress={project.id} chain={project.chain} />
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-[var(--color-border)] grid grid-cols-3 gap-4">
                   <MetadataItem label="Chain" value={project.chain} />
                   <MetadataItem label="Stage" value={project.stage} />
-                  <MetadataItem label="Token Status" value={project.tokenStatus} />
+                  <MetadataItem label="Token" value={project.tokenStatus} />
                 </div>
               </div>
             </div>
 
-            {/* Tactical Footer */}
-            <div className="sticky bottom-0 px-3 sm:px-4 md:px-8 py-3 md:py-4 lg:py-6 bg-gray-950 text-white flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 md:gap-4">
-              <button 
-                className="px-4 sm:px-6 md:px-8 py-2 md:py-3 bg-white text-gray-950 rounded-lg text-label font-bold hover:bg-gray-100 transition-all active:scale-95 text-xs md:text-sm whitespace-nowrap cursor-pointer flex-shrink-0"
-              >
-                Download Briefing
-              </button>
+            <div className="sticky bottom-0 px-4 md:px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-bg-elevated)] flex justify-end">
+              <button className="btn-primary text-xs md:text-sm">Download Briefing</button>
             </div>
           </motion.div>
         </div>
@@ -144,48 +139,74 @@ export function ProjectReportModal({ project, isOpen, onClose }: ProjectReportMo
   );
 }
 
-function ReportMetric({ label, value, subtext, isRisk }: { label: string, value: number, subtext: string, isRisk?: boolean }) {
-  const color = isRisk 
-    ? (value > 60 ? designTokens.colors.signal.danger : designTokens.colors.signal.success)
-    : designTokens.colors.text.primary;
+function ReportMetric({
+  label,
+  value,
+  subtext,
+  isRisk,
+}: {
+  label: string;
+  value: number;
+  subtext: string;
+  isRisk?: boolean;
+}) {
+  const color = isRisk
+    ? value > 60
+      ? designTokens.colors.signal.danger
+      : designTokens.colors.signal.success
+    : 'var(--color-text-primary)';
 
   return (
-    <div className="space-y-1 md:space-y-2">
-      <div className="text-label text-gray-400 text-xs md:text-sm">{label}</div>
-      <div className="font-mono text-3xl sm:text-4xl md:text-5xl font-bold tracking-tighter" style={{ color }}>{value}</div>
-      <p className="text-[0.55rem] sm:text-[0.6rem] md:text-[0.65rem] text-gray-500 leading-tight uppercase font-medium">{subtext}</p>
+    <div className="space-y-1">
+      <span className="text-label">{label}</span>
+      <div className="font-mono text-3xl md:text-4xl font-bold tracking-tighter stat-value" style={{ color }}>
+        {value}
+      </div>
+      <p className="text-[10px] text-[var(--color-text-muted)] uppercase font-medium leading-tight">{subtext}</p>
     </div>
   );
 }
 
-function SignalItem({ type, text }: { type: 'positive' | 'negative', text: string }) {
+function SignalItem({ type, text }: { type: 'positive' | 'negative'; text: string }) {
   const isPositive = type === 'positive';
   return (
-    <div className="flex items-start gap-3 p-3 sm:p-4 md:p-5 bg-white border border-gray-100 rounded-lg md:rounded-xl">
-      <div className={`p-1.5 md:p-2 rounded-lg flex-shrink-0 ${isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+    <div className="flex items-start gap-3 p-4 card">
+      <div
+        className={`p-2 rounded-lg flex-shrink-0 ${
+          isPositive ? 'bg-[rgba(52,211,153,0.12)] text-[var(--color-success)]' : 'bg-[rgba(248,113,113,0.12)] text-[var(--color-danger)]'
+        }`}
+      >
         {isPositive ? <Shield size={14} /> : <Target size={14} />}
       </div>
-      <span className="text-xs sm:text-sm md:text-sm font-semibold text-gray-900">{text}</span>
+      <span className="text-sm font-medium text-[var(--color-text-primary)]">{text}</span>
     </div>
   );
 }
 
-function MetadataItem({ label, value }: { label: string, value: string }) {
+function MetadataItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="space-y-0.5 md:space-y-1">
-      <div className="text-[0.5rem] sm:text-[0.55rem] md:text-[0.6rem] font-bold uppercase tracking-widest text-gray-400">{label}</div>
-      <div className="text-xs sm:text-sm md:text-sm font-bold text-gray-900 uppercase tracking-tight">{value}</div>
+    <div className="space-y-1">
+      <span className="text-label">{label}</span>
+      <div className="text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-tight">{value}</div>
     </div>
   );
 }
 
-function ExternalLinkButton({ icon: Icon, href, label }: { icon: any, href?: string, label: string }) {
+function ExternalLinkButton({
+  icon: Icon,
+  href,
+  label,
+}: {
+  icon: ComponentType<{ size?: number }>;
+  href?: string;
+  label: string;
+}) {
   return (
-    <a 
-      href={href} 
-      target="_blank" 
+    <a
+      href={href}
+      target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-2 px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 md:py-3 border border-gray-100 rounded-lg font-bold text-label text-gray-900 transition-all hover:border-gray-900 hover:bg-gray-50 cursor-pointer text-xs sm:text-xs md:text-sm whitespace-nowrap"
+      className="btn-ghost text-xs"
     >
       <Icon size={12} />
       {label}
