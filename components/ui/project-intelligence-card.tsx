@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ArrowRight, ShieldCheck, Zap, Activity } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Zap, Activity, Droplets } from 'lucide-react';
 import { designTokens } from './design-tokens';
 
 export interface ProjectIntelligence {
@@ -10,6 +10,8 @@ export interface ProjectIntelligence {
   category: string;
   chain: string;
   stage: string;
+  contractAddress?: string | null;
+  coingeckoId?: string | null;
   website?: string;
   xAccount?: string;
   founders?: string[];
@@ -22,6 +24,7 @@ export interface ProjectIntelligence {
   legitimacyScore: number;
   innovationScore: number;
   survivalProbability: 'low' | 'medium' | 'high';
+  survivalScore?: number;
   redFlags: string[];
   positiveSignals: string[];
   fundingAmount?: number;
@@ -34,8 +37,22 @@ interface ProjectCardProps {
   onClick?: () => void;
 }
 
+function riskTone(score: number) {
+  if (score >= 70) return designTokens.colors.signal.danger;
+  if (score >= 35) return designTokens.colors.signal.warning;
+  return designTokens.colors.signal.success;
+}
+
+function formatVol(n: number) {
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+  return n > 0 ? `$${n}` : '—';
+}
+
 export function ProjectIntelligenceCard({ project, onClick }: ProjectCardProps) {
-  const isHighRisk = project.rugRiskScore >= 70;
+  const riskColor = riskTone(project.rugRiskScore);
+  const survivalPct = project.survivalScore ?? (project.survivalProbability === 'high' ? 78 : project.survivalProbability === 'low' ? 32 : 55);
 
   return (
     <motion.article
@@ -44,84 +61,64 @@ export function ProjectIntelligenceCard({ project, onClick }: ProjectCardProps) 
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       className="group relative flex flex-col cursor-pointer h-full"
     >
-      <div className="card flex flex-col h-full p-5 md:p-6 space-y-5 group-hover:shadow-[var(--shadow-glow)]">
+      <div className="card flex flex-col h-full p-5 space-y-4 group-hover:shadow-[var(--shadow-glow)]">
         <div className="flex justify-between items-start gap-3">
-          <div className="space-y-2 min-w-0">
+          <div className="space-y-1.5 min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h3
-                className="font-bold tracking-tight leading-none text-[var(--color-text-primary)] truncate"
+                className="font-bold tracking-tight text-[var(--color-text-primary)] truncate"
                 style={{ fontSize: designTokens.typography.sizes.lg }}
               >
                 {project.name}
               </h3>
               <span
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{
-                  backgroundColor: isHighRisk
-                    ? designTokens.colors.signal.danger
-                    : designTokens.colors.signal.success,
-                  boxShadow: isHighRisk
-                    ? '0 0 6px var(--color-danger)'
-                    : '0 0 6px var(--color-success)',
-                }}
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: riskColor, boxShadow: `0 0 6px ${riskColor}` }}
               />
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-muted)]">
-              <span className="truncate">{project.category}</span>
-              <span className="w-1 h-1 rounded-full bg-[var(--color-border)] shrink-0" />
-              <span className="truncate">{project.chain}</span>
-            </div>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-muted)]">
+              {project.category} · {project.chain}
+            </p>
+            {project.contractAddress && (
+              <p className="text-[10px] font-mono text-[var(--color-accent)] truncate">
+                {project.contractAddress.slice(0, 8)}…{project.contractAddress.slice(-4)}
+              </p>
+            )}
           </div>
-
-          <div className="text-right flex-shrink-0">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] mb-1" title="0 = low rug risk">
+          <div className="text-right shrink-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
               Rug risk
-            </div>
-            <div
-              className="font-mono font-bold leading-none tabular-nums"
-              style={{
-                fontSize: designTokens.typography.sizes.xl,
-                color: isHighRisk ? designTokens.colors.signal.danger : 'var(--color-text-primary)',
-              }}
+            </p>
+            <p
+              className="font-mono font-bold tabular-nums leading-none mt-0.5"
+              style={{ fontSize: designTokens.typography.sizes.xl, color: riskColor }}
             >
               {project.rugRiskScore}
-            </div>
+            </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4 pt-3 border-t border-[var(--color-border)]">
+        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[var(--color-border)]">
           {[
-            { icon: Activity, label: 'Innovation', value: `${project.innovationScore}%` },
-            { icon: ShieldCheck, label: 'Legitimacy', value: `${project.legitimacyScore}%` },
-            { icon: Zap, label: 'GitHub', value: `${project.githubActivity}pts` },
-            {
-              icon: ArrowRight,
-              label: 'Network',
-              value: `${(project.communitySize / 1000).toFixed(1)}k`,
-              rotate: true,
-            },
-          ].map(({ icon: Icon, label, value, rotate }) => (
-            <div key={label} className="space-y-1">
+            { icon: ShieldCheck, label: 'Legitimacy', value: `${project.legitimacyScore}` },
+            { icon: Activity, label: 'Innovation', value: `${project.innovationScore}` },
+            { icon: Zap, label: 'Dev score', value: `${project.githubActivity}` },
+            { icon: Droplets, label: '24h vol', value: formatVol(project.liquiditySignals) },
+          ].map(({ icon: Icon, label, value }) => (
+            <div key={label} className="space-y-0.5">
               <div className="flex items-center gap-1 text-[var(--color-text-muted)]">
-                <Icon size={10} className={rotate ? '-rotate-45' : ''} />
-                <span className="text-[10px] uppercase tracking-wider font-semibold">{label}</span>
+                <Icon size={10} />
+                <span className="text-[9px] uppercase tracking-wider font-semibold">{label}</span>
               </div>
-              <div className="font-mono font-bold text-[var(--color-text-primary)] text-sm">{value}</div>
+              <p className="font-mono font-bold text-sm text-[var(--color-text-primary)]">{value}</p>
             </div>
           ))}
         </div>
 
-        <div className="mt-auto pt-3 border-t border-[var(--color-border)] flex items-center justify-between">
-          <div className="flex -space-x-1.5">
-            {project.investors?.slice(0, 3).map((inv, i) => (
-              <div
-                key={i}
-                className="w-5 h-5 rounded-full border border-[var(--color-bg-card)] bg-[var(--color-accent-soft)] flex items-center justify-center font-mono font-bold text-[var(--color-accent)] uppercase text-[8px]"
-              >
-                {inv[0]}
-              </div>
-            ))}
-          </div>
+        <div className="mt-auto flex items-center justify-between pt-3 border-t border-[var(--color-border)]">
+          <span className="text-[10px] text-[var(--color-text-muted)]">
+            Survival <span className="font-mono text-[var(--color-text-primary)]">{survivalPct}%</span>
+          </span>
           <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-accent)] group-hover:gap-2 transition-all">
             Report
             <ArrowRight size={10} />

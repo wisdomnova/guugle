@@ -3,8 +3,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search,
-  TrendingUp,
   X,
   Zap,
   AlertTriangle,
@@ -12,11 +10,11 @@ import {
   Loader2,
   ArrowRight,
   RefreshCw,
+  LayoutGrid,
 } from 'lucide-react';
 import { ProjectIntelligenceCard, ProjectIntelligence } from './project-intelligence-card';
 import { AnalysisBreakdown } from './analysis-breakdown';
 import type { FullAnalysisResult } from '@/lib/analysis';
-import { designTokens } from './design-tokens';
 import { cn } from '@/lib/utils';
 
 interface DiscoveryDashboardProps {
@@ -30,7 +28,6 @@ type FilterCategory = 'all' | 'ai-crypto' | 'defi' | 'infra' | 'gaming' | 'walle
 
 const CATEGORIES: { id: FilterCategory; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'ai-crypto', label: 'AI × Crypto' },
   { id: 'defi', label: 'DeFi' },
   { id: 'infra', label: 'Infra' },
   { id: 'gaming', label: 'Gaming' },
@@ -52,8 +49,9 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
     setAnalyzeResult(null);
     setAnalyzeError(null);
     try {
-      const url = `/api/analyze?q=${encodeURIComponent(input)}&t=${Date.now()}`;
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await fetch(`/api/analyze?q=${encodeURIComponent(input)}&t=${Date.now()}`, {
+        cache: 'no-store',
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Analysis failed');
       setAnalyzeResult(data);
@@ -65,21 +63,24 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
   };
 
   const buildProjectFromResult = (r: FullAnalysisResult): ProjectIntelligence => ({
-    id: r.contractAddress ?? r.name ?? 'analyzed',
+    id: r.contractAddress ?? r.name,
     name: r.name,
-    category: 'Analyzed',
+    category: r.intelligence.token?.symbol || 'Analyzed',
     chain: r.chain,
     stage: 'launched',
-    website: r.intelligence.token?.website || undefined,
+    contractAddress: r.contractAddress,
+    coingeckoId: r.coingeckoId,
+    website: r.intelligence.token?.website,
     founders: [],
     productStatus: 'launched',
     tokenStatus: r.contractAddress ? 'public' : 'planned',
     communitySize: r.intelligence.github?.metrics.starCount ?? 0,
     githubActivity: r.scores.githubActivity,
-    liquiditySignals: Math.round(r.intelligence.market?.volume24h ?? 0),
+    liquiditySignals: Math.round(r.intelligence.market?.volume24h ?? r.intelligence.dex?.volume24h ?? 0),
     rugRiskScore: r.scores.rugRiskScore,
     legitimacyScore: r.scores.legitimacyScore,
     innovationScore: r.scores.innovationScore,
+    survivalScore: r.scores.survivalProbability,
     survivalProbability:
       r.scores.survivalProbability > 65 ? 'high' : r.scores.survivalProbability > 40 ? 'medium' : 'low',
     redFlags: r.redFlags.map((f) => f.flag),
@@ -90,164 +91,101 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
   const filteredProjects = useMemo(() => {
     let result = projects;
     if (selectedCategory !== 'all') {
-      result = result.filter((p) => {
-        const cat = p.category.toLowerCase().replace(/\s+/g, '-').replace('×', '');
-        return cat.includes(selectedCategory.replace('ai-crypto', 'ai'));
-      });
+      result = result.filter((p) => p.category.toLowerCase().includes(selectedCategory.replace('-', '')));
     }
-    return [...result].sort(
-      (a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
-    );
+    return [...result].sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
   }, [projects, selectedCategory]);
 
   const avgRugRisk = Math.round(
-    filteredProjects.reduce((sum, p) => sum + p.rugRiskScore, 0) / filteredProjects.length || 0
+    filteredProjects.reduce((sum, p) => sum + p.rugRiskScore, 0) / (filteredProjects.length || 1)
   );
   const highRiskCount = filteredProjects.filter((p) => p.rugRiskScore >= 70).length;
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 12 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] as const },
-    },
-  };
-
   return (
-    <div className="container-app py-8 md:py-12 space-y-8 md:space-y-10">
-      {/* Hero + analyze */}
-      <section className="card-elevated p-6 md:p-8 space-y-5 shadow-[var(--shadow-glow)]">
-        <div className="space-y-2">
-          <span className="badge">
-            <Zap size={12} />
-            Live Risk Analysis
-          </span>
-          <h1
-            className="font-bold tracking-tight text-[var(--color-text-primary)]"
-            style={{ fontSize: designTokens.typography.sizes['2xl'] }}
-          >
-            Paste a contract. Know before you ape.
-          </h1>
-          <p className="text-body text-sm max-w-xl">
-            Enter a contract address or project name for real-time rug risk, legitimacy, and on-chain
-            signals.
-          </p>
+    <div className="container-app py-8 md:py-10 space-y-10">
+      <section className="card-elevated p-6 md:p-8 space-y-5 border-[var(--color-border-glow)]">
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+          <div className="space-y-2 max-w-xl">
+            <span className="badge">
+              <Zap size={12} />
+              Contract analyzer
+            </span>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[var(--color-text-primary)]">
+              Paste any contract. Get a unique risk profile.
+            </h1>
+            <p className="text-body text-sm">
+              Live pulls from DexScreener, Etherscan, CoinGecko, and GitHub — scores are computed per address.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
-            placeholder="0x... or project name"
+            placeholder="0x… contract address or token name"
             value={analyzeInput}
             onChange={(e) => setAnalyzeInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
             className="input-field flex-1 font-mono text-sm"
           />
-          <button
-            onClick={handleAnalyze}
-            disabled={analyzing || !analyzeInput.trim()}
-            className="btn-primary shrink-0"
-          >
+          <button onClick={handleAnalyze} disabled={analyzing || !analyzeInput.trim()} className="btn-primary shrink-0">
             {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-            {analyzing ? 'Analyzing…' : 'Analyze'}
+            {analyzing ? 'Scanning…' : 'Analyze'}
           </button>
         </div>
 
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {analyzeError && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-2 text-sm chip-danger px-4 py-3 rounded-lg"
+              className="chip-danger text-sm px-4 py-3 rounded-lg flex items-center gap-2"
             >
               <AlertTriangle size={14} />
               {analyzeError}
-            </motion.div>
+            </motion.p>
           )}
           {analyzeResult && (
             <motion.div
-              initial={{ opacity: 0, y: -8 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="space-y-4 pt-2 border-t border-[var(--color-border)]"
+              className="space-y-4 pt-4 border-t border-[var(--color-border)]"
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2 min-w-0">
-                  <CheckCircle size={14} className="text-[var(--color-success)] shrink-0" />
-                  <span className="font-bold text-[var(--color-text-primary)]">{analyzeResult.name}</span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CheckCircle size={14} className="text-[var(--color-success)]" />
+                  <span className="font-bold">{analyzeResult.name}</span>
                   {analyzeResult.contractAddress && (
-                    <span className="text-[10px] font-mono text-[var(--color-text-muted)] hidden md:block">
-                      {analyzeResult.contractAddress.slice(0, 10)}…
-                      {analyzeResult.contractAddress.slice(-6)}
+                    <span className="text-[10px] font-mono text-[var(--color-text-muted)]">
+                      {analyzeResult.contractAddress.slice(0, 10)}…{analyzeResult.contractAddress.slice(-4)}
                     </span>
                   )}
-                  <span className="badge badge-muted">{analyzeResult.chain}</span>
                 </div>
-                <button
-                  onClick={() => setAnalyzeResult(null)}
-                  className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer p-1"
-                >
+                <button onClick={() => setAnalyzeResult(null)} className="text-[var(--color-text-muted)] p-1">
                   <X size={14} />
                 </button>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
-                  {
-                    label: 'Rug risk',
-                    value: analyzeResult.scores.rugRiskScore,
-                    color:
-                      analyzeResult.scores.rugRiskScore > 60
-                        ? 'var(--color-danger)'
-                        : analyzeResult.scores.rugRiskScore > 30
-                          ? 'var(--color-warning)'
-                          : 'var(--color-success)',
-                  },
-                  {
-                    label: 'Legitimacy',
-                    value: analyzeResult.scores.legitimacyScore,
-                    color:
-                      analyzeResult.scores.legitimacyScore > 70
-                        ? 'var(--color-success)'
-                        : 'var(--color-warning)',
-                  },
-                  {
-                    label: 'Innovation',
-                    value: analyzeResult.scores.innovationScore,
-                    color: 'var(--color-accent-secondary)',
-                  },
-                  {
-                    label: 'Survival',
-                    value: analyzeResult.scores.survivalProbability,
-                    color:
-                      analyzeResult.scores.survivalProbability > 60
-                        ? 'var(--color-success)'
-                        : 'var(--color-warning)',
-                    suffix: '%',
-                  },
-                ].map(({ label, value, color, suffix }) => (
-                  <div key={label} className="card p-4 text-center space-y-1">
-                    <div className="text-2xl font-mono font-bold stat-value" style={{ color }}>
-                      {value}
-                      {suffix ?? ''}
-                    </div>
-                    <span className="text-label">{label}</span>
+                  { k: 'Rug risk', v: analyzeResult.scores.rugRiskScore },
+                  { k: 'Legitimacy', v: analyzeResult.scores.legitimacyScore },
+                  { k: 'Innovation', v: analyzeResult.scores.innovationScore },
+                  { k: 'Survival', v: analyzeResult.scores.survivalProbability, s: '%' },
+                ].map(({ k, v, s }) => (
+                  <div key={k} className="card p-3 text-center">
+                    <p className="text-xl font-mono font-bold text-[var(--color-text-primary)]">
+                      {v}
+                      {s ?? ''}
+                    </p>
+                    <p className="text-label mt-1">{k}</p>
                   </div>
                 ))}
               </div>
               <AnalysisBreakdown result={analyzeResult} />
-
-              <button
-                onClick={() => onProjectSelect?.(buildProjectFromResult(analyzeResult))}
-                className="btn-primary w-full"
-              >
-                View Full Report
+              <button onClick={() => onProjectSelect?.(buildProjectFromResult(analyzeResult))} className="btn-primary w-full">
+                Open full report
                 <ArrowRight size={14} />
               </button>
             </motion.div>
@@ -255,104 +193,75 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
         </AnimatePresence>
       </section>
 
-      {/* Stats header */}
-      <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-3">
-          <span className="badge badge-muted">
-            <TrendingUp size={12} />
-            Market Intelligence
-          </span>
-          <h2
-            className="font-bold tracking-tight text-[var(--color-text-primary)]"
-            style={{ fontSize: designTokens.typography.sizes.xl }}
-          >
-            Project Discovery
-          </h2>
-          <p className="text-body text-sm max-w-xl">
-            Automated signals for crypto protocols — on-chain metrics, risk scoring, and smart money
-            activity.
-          </p>
+      <section className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <LayoutGrid size={18} className="text-[var(--color-accent)]" />
+            <div>
+              <h2 className="text-lg font-bold text-[var(--color-text-primary)]">Tracked protocols</h2>
+              <p className="text-xs text-[var(--color-text-muted)]">Live-scored on each load · {filteredProjects.length} shown</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex gap-6 text-sm">
+              <div>
+                <p className="text-label">Avg rug risk</p>
+                <p className="font-mono font-bold text-lg">{avgRugRisk}</p>
+              </div>
+              <div>
+                <p className="text-label">High risk</p>
+                <p className="font-mono font-bold text-lg text-[var(--color-danger)]">{highRiskCount}</p>
+              </div>
+            </div>
+            {onRefresh && (
+              <button type="button" onClick={onRefresh} disabled={isLoading} className="btn-ghost text-xs">
+                <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+                Rescore
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {onRefresh && (
+
+        <div className="flex flex-wrap gap-2">
+          {CATEGORIES.map(({ id, label }) => (
             <button
-              type="button"
-              onClick={onRefresh}
-              disabled={isLoading}
-              className="btn-ghost text-xs shrink-0"
-              title="Pull latest scores from database"
+              key={id}
+              onClick={() => setSelectedCategory(id)}
+              className={cn('filter-pill', selectedCategory === id && 'filter-pill-active')}
             >
-              <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-              Refresh
+              {label}
             </button>
-          )}
+          ))}
         </div>
-        <div className="flex gap-8 md:pl-8 md:border-l border-[var(--color-border)]">
-          <div className="space-y-1">
-            <span className="text-label">Avg rug risk</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl md:text-3xl stat-value">{avgRugRisk}</span>
-              <span className="text-xs font-mono text-[var(--color-text-muted)]">/100</span>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-label">High Risk</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl md:text-3xl font-mono font-bold text-[var(--color-danger)]">
-                {highRiskCount}
-              </span>
-              <span className="text-xs text-[var(--color-text-muted)]">detected</span>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Category filters */}
-      <div className="flex flex-wrap gap-2">
-        {CATEGORIES.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setSelectedCategory(id)}
-            className={cn('filter-pill', selectedCategory === id && 'filter-pill-active')}
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="card h-48 animate-pulse opacity-50" />
+            ))}
+          </div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
           >
-            {label}
-          </button>
-        ))}
-      </div>
+            {filteredProjects.map((project) => (
+              <ProjectIntelligenceCard
+                key={`${project.id}-${project.rugRiskScore}-${project.legitimacyScore}`}
+                project={project}
+                onClick={() => onProjectSelect?.(project)}
+              />
+            ))}
+          </motion.div>
+        )}
 
-      {/* Grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="card h-52 animate-pulse opacity-60" />
-          ))}
-        </div>
-      ) : (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"
-        >
-          {filteredProjects.map((project) => (
-            <motion.div key={project.id} variants={itemVariants}>
-              <ProjectIntelligenceCard project={project} onClick={() => onProjectSelect?.(project)} />
-            </motion.div>
-          ))}
-        </motion.div>
-      )}
-
-      {filteredProjects.length === 0 && !isLoading && (
-        <div className="card-elevated py-16 text-center space-y-4 border-dashed">
-          <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-[var(--color-text-muted)]">
-            <Search size={20} />
+        {filteredProjects.length === 0 && !isLoading && (
+          <div className="card-elevated py-12 text-center text-sm text-[var(--color-text-muted)]">
+            No projects in this filter. Run an analysis above or try another category.
           </div>
-          <div>
-            <h3 className="text-base font-bold text-[var(--color-text-primary)]">No projects found</h3>
-            <p className="text-sm text-[var(--color-text-muted)]">Try another category or run an analysis above.</p>
-          </div>
-        </div>
-      )}
+        )}
+      </section>
     </div>
   );
 }
