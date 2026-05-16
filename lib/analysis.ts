@@ -9,7 +9,8 @@ import {
   checkExchangeListing,
   resolveCoinByContract,
 } from './integrations/coingecko';
-import { getDexMetricsByToken, type DexPairMetrics } from './integrations/dexscreener';
+import { getDexTokenData, type DexPairMetrics } from './integrations/dexscreener';
+import { resolveDisplayName } from './token-display';
 import {
   getGitHubMetrics,
   analyzeCodeQuality,
@@ -149,14 +150,15 @@ export async function gatherProjectIntelligence(inputs: {
     }
   }
 
-  const [onChainRaw, dexRaw, marketRaw, tokenInfo, exchanges] = await Promise.all([
+  const [onChainRaw, dexTokenRaw, marketRaw, tokenInfo, exchanges] = await Promise.all([
     inputs.contractAddress ? analyzeOnChainMetrics(inputs.contractAddress) : Promise.resolve(null),
-    inputs.contractAddress ? getDexMetricsByToken(inputs.contractAddress) : Promise.resolve(null),
+    inputs.contractAddress ? getDexTokenData(inputs.contractAddress) : Promise.resolve(null),
     coingeckoId ? getMarketData(coingeckoId) : Promise.resolve(null),
     coingeckoId ? getTokenInfo(coingeckoId) : Promise.resolve(null),
     coingeckoId ? checkExchangeListing(coingeckoId) : Promise.resolve(null),
   ]);
 
+  const dexRaw = dexTokenRaw?.metrics ?? null;
   const dex = dexRaw ? dexToSnapshot(dexRaw) : null;
   if (dex) sourcesUsed.push('DexScreener');
   else if (inputs.contractAddress) sourcesMissing.push('DexScreener (no active pairs)');
@@ -220,9 +222,17 @@ export async function gatherProjectIntelligence(inputs: {
           description: tokenInfo.description?.slice(0, 280) ?? '',
           twitter: tokenInfo.twitter,
         }
-      : null;
+      : dexTokenRaw?.name
+        ? {
+            name: dexTokenRaw.name,
+            symbol: dexTokenRaw.symbol,
+            website: '',
+            description: '',
+            twitter: '',
+          }
+        : null;
 
-  if (token) sourcesUsed.push('CoinGecko metadata');
+  if (token) sourcesUsed.push(tokenInfo ? 'CoinGecko metadata' : 'DexScreener metadata');
 
   return { market, onChain, dex, github, token, sourcesUsed, sourcesMissing };
 }
@@ -254,8 +264,14 @@ export async function runFullAnalysis(params: {
     }
   );
 
+  const displayName = resolveDisplayName(params.name, {
+    name: intelligence.token?.name,
+    symbol: intelligence.token?.symbol,
+    contractAddress: params.contractAddress,
+  });
+
   return {
-    name: params.name,
+    name: displayName,
     contractAddress: params.contractAddress ?? null,
     coingeckoId: params.coingeckoId ?? null,
     chain: params.chain,

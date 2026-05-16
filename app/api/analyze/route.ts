@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { runFullAnalysis } from '@/lib/analysis';
-import { validateContractAddress, isEthAddress } from '@/lib/contract-validation';
+import {
+  validateContractAddress,
+  displayNameForContract,
+  isEthAddress,
+} from '@/lib/contract-validation';
 import { cgFetch } from '@/lib/coingecko-client';
 
 export const dynamic = 'force-dynamic';
@@ -98,11 +102,12 @@ export async function GET(request: Request) {
       contractAddress = validation.contractAddress;
       coingeckoId = validation.coingeckoId;
       githubRepo = validation.github;
-      projectName =
-        validation.name ??
-        (validation.symbol
-          ? validation.symbol
-          : `${contractAddress.slice(0, 8)}…${contractAddress.slice(-4)}`);
+      projectName = displayNameForContract(contractAddress, {
+        name: validation.name,
+        symbol: validation.symbol,
+        coingeckoId: validation.coingeckoId,
+        github: validation.github,
+      });
     } else {
       const resolved = await resolveByName(input);
       if (!resolved) {

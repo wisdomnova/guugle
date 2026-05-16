@@ -8,6 +8,7 @@ const DEFAULT_CHAIN_ID = '1';
 
 export interface ContractInfo {
   contractAddress: string;
+  contractName: string;
   deployerWallet: string;
   deployDate: Date | null;
   totalSupply: string;
@@ -65,6 +66,7 @@ function parseSourceCodeRow(address: string, row: Record<string, string>): Contr
 
   return {
     contractAddress: address,
+    contractName: row.ContractName?.trim() || '',
     deployerWallet: row.Creator || '',
     deployDate: ts > 0 ? new Date(ts * 1000) : null,
     totalSupply: row.TokenSupply || '0',
