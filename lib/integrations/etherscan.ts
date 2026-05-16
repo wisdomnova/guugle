@@ -52,6 +52,26 @@ async function etherscanGet<T>(params: Record<string, string>): Promise<T | null
   }
 }
 
+function parseSourceCodeRow(address: string, row: Record<string, string>): ContractInfo | null {
+  const ts = parseInt(row.TimeStamp || '0', 10);
+  const hasSource = Boolean(row.SourceCode && row.SourceCode.length > 2);
+  const hasName = Boolean(row.ContractName?.trim());
+  const hasCreator = Boolean(row.Creator?.trim());
+  const hasSupply = Boolean(row.TokenSupply && row.TokenSupply !== '0');
+
+  if (!hasSource && !hasName && !hasCreator && ts <= 0 && !hasSupply) {
+    return null;
+  }
+
+  return {
+    contractAddress: address,
+    deployerWallet: row.Creator || '',
+    deployDate: ts > 0 ? new Date(ts * 1000) : null,
+    totalSupply: row.TokenSupply || '0',
+    isVerified: hasSource,
+  };
+}
+
 export async function getContractInfo(address: string): Promise<ContractInfo | null> {
   const result = await etherscanGet<Array<Record<string, string>>>({
     module: 'contract',
@@ -60,17 +80,58 @@ export async function getContractInfo(address: string): Promise<ContractInfo | n
   });
 
   if (!result?.[0]) return null;
+  return parseSourceCodeRow(address.toLowerCase(), result[0]);
+}
 
-  const contract = result[0];
-  const ts = parseInt(contract.TimeStamp || '0', 10);
+/** True when eth_getCode returns deployed bytecode (not an EOA / empty slot). */
+export async function hasDeployedBytecode(address: string): Promise<boolean> {
+  if (!ETHERSCAN_API_KEY) return false;
 
-  return {
-    contractAddress: address,
-    deployerWallet: contract.Creator || '',
-    deployDate: ts > 0 ? new Date(ts * 1000) : null,
-    totalSupply: contract.TokenSupply || '0',
-    isVerified: Boolean(contract.SourceCode && contract.SourceCode.length > 2),
-  };
+  try {
+    const res = await fetch(
+      v2Url({
+        module: 'proxy',
+        action: 'eth_getCode',
+        address: address.toLowerCase(),
+        tag: 'latest',
+      }),
+      { cache: 'no-store' }
+    );
+    const data = await res.json();
+    const code = typeof data?.result === 'string' ? data.result.trim() : '';
+    return code.length > 2 && code !== '0x';
+  } catch {
+    return false;
+  }
+}
+
+/** Token contract or verified deploy visible via Etherscan metadata. */
+export async function isKnownContractOnChain(address: string): Promise<boolean> {
+  if (!ETHERSCAN_API_KEY) return false;
+
+  try {
+    const [info, holderRes] = await Promise.all([
+      getContractInfo(address),
+      fetch(
+        v2Url({
+          module: 'token',
+          action: 'tokenholdercount',
+          contractaddress: address.toLowerCase(),
+        }),
+        { cache: 'no-store' }
+      ).then((r) => r.json()),
+    ]);
+
+    if (info) return true;
+
+    return (
+      holderRes?.status === '1' &&
+      typeof holderRes.result === 'string' &&
+      /^\d+$/.test(holderRes.result)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function analyzeOnChainMetrics(contractAddress: string): Promise<OnChainMetrics> {

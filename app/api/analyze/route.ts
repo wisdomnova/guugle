@@ -1,29 +1,64 @@
 import { NextResponse } from 'next/server';
 import { runFullAnalysis } from '@/lib/analysis';
-import { resolveCoinByContract } from '@/lib/integrations/coingecko';
+import { validateContractAddress, isEthAddress } from '@/lib/contract-validation';
 import { cgFetch } from '@/lib/coingecko-client';
 
 export const dynamic = 'force-dynamic';
 
-async function resolveTokenMeta(address: string): Promise<{
+interface NameResolution {
   name: string;
   coingeckoId?: string;
-  contractAddress: string;
+  contractAddress?: string;
   github?: string;
-}> {
-  const normalized = address.toLowerCase();
-  let name = `${normalized.slice(0, 8)}…${normalized.slice(-4)}`;
-  let coingeckoId: string | undefined;
-  let github: string | undefined;
+  chain: string;
+}
 
-  const cg = await resolveCoinByContract(normalized);
-  if (cg) {
-    coingeckoId = cg.id;
-    name = cg.name;
-    github = cg.github;
+async function resolveByName(input: string): Promise<NameResolution | null> {
+  const slug = input.toLowerCase().trim();
+
+  try {
+    const detailRes = await cgFetch(
+      `/coins/${encodeURIComponent(slug)}?localization=false&tickers=false&community_data=false&developer_data=true`
+    );
+
+    if (detailRes.ok) {
+      const data = await detailRes.json();
+      if (!data?.id) return null;
+      return {
+        name: data.name ?? input,
+        coingeckoId: data.id,
+        contractAddress: data.platforms?.ethereum?.toLowerCase() || undefined,
+        chain: data.platforms?.ethereum ? 'Ethereum' : 'Unknown',
+        github: data.links?.repos_url?.github?.[0],
+      };
+    }
+
+    const searchRes = await cgFetch(`/search?query=${encodeURIComponent(input)}`);
+    if (!searchRes.ok) return null;
+
+    const searchData = await searchRes.json();
+    const match =
+      searchData.coins?.find((c: { id: string }) => c.id === slug) ?? searchData.coins?.[0];
+    if (!match?.id) return null;
+
+    const coinRes = await cgFetch(
+      `/coins/${encodeURIComponent(match.id)}?localization=false&tickers=false&community_data=false&developer_data=true`
+    );
+    if (!coinRes.ok) {
+      return { name: match.name ?? input, coingeckoId: match.id, chain: 'Unknown' };
+    }
+
+    const coin = await coinRes.json();
+    return {
+      name: coin.name ?? match.name ?? input,
+      coingeckoId: coin.id,
+      contractAddress: coin.platforms?.ethereum?.toLowerCase() || undefined,
+      chain: coin.platforms?.ethereum ? 'Ethereum' : 'Unknown',
+      github: coin.links?.repos_url?.github?.[0],
+    };
+  } catch {
+    return null;
   }
-
-  return { name, coingeckoId, contractAddress: normalized, github };
 }
 
 export async function GET(request: Request) {
@@ -37,7 +72,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const isAddress = /^0x[0-9a-fA-F]{40}$/i.test(input);
+  const isAddress = isEthAddress(input);
 
   try {
     let projectName = input;
@@ -47,37 +82,44 @@ export async function GET(request: Request) {
     let chain = 'Ethereum';
 
     if (isAddress) {
-      const meta = await resolveTokenMeta(input);
-      projectName = meta.name;
-      contractAddress = meta.contractAddress;
-      coingeckoId = meta.coingeckoId;
-      githubRepo = meta.github;
-    } else {
-      try {
-        const res = await cgFetch(
-          `/coins/${encodeURIComponent(input.toLowerCase())}?localization=false&tickers=false&community_data=false&developer_data=true`
+      const validation = await validateContractAddress(input);
+
+      if (!validation.exists) {
+        return NextResponse.json(
+          {
+            error:
+              'No token found at this address. Check the contract on Ethereum mainnet or try a listed symbol (e.g. uniswap, chainlink).',
+            code: 'CONTRACT_NOT_FOUND',
+          },
+          { status: 404 }
         );
-        if (res.ok) {
-          const data = await res.json();
-          coingeckoId = data.id;
-          projectName = data.name ?? input;
-          contractAddress = data.platforms?.ethereum?.toLowerCase() || undefined;
-          chain = contractAddress ? 'Ethereum' : 'Unknown';
-          githubRepo = data.links?.repos_url?.github?.[0];
-        } else {
-          const searchRes = await cgFetch(`/search?query=${encodeURIComponent(input)}`);
-          if (searchRes.ok) {
-            const searchData = await searchRes.json();
-            const first = searchData.coins?.[0];
-            if (first) {
-              coingeckoId = first.id;
-              projectName = first.name ?? input;
-            }
-          }
-        }
-      } catch {
-        /* score with name only */
       }
+
+      contractAddress = validation.contractAddress;
+      coingeckoId = validation.coingeckoId;
+      githubRepo = validation.github;
+      projectName =
+        validation.name ??
+        (validation.symbol
+          ? validation.symbol
+          : `${contractAddress.slice(0, 8)}…${contractAddress.slice(-4)}`);
+    } else {
+      const resolved = await resolveByName(input);
+      if (!resolved) {
+        return NextResponse.json(
+          {
+            error: 'Token not found on CoinGecko. Try a contract address or official coin id/symbol.',
+            code: 'TOKEN_NOT_FOUND',
+          },
+          { status: 404 }
+        );
+      }
+
+      projectName = resolved.name;
+      contractAddress = resolved.contractAddress;
+      coingeckoId = resolved.coingeckoId;
+      githubRepo = resolved.github;
+      chain = resolved.chain;
     }
 
     const result = await runFullAnalysis({
