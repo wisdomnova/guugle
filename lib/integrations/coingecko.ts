@@ -3,6 +3,7 @@
  */
 
 import { cgFetch } from '../coingecko-client';
+import { parseCoinGeckoLinks, type ProjectLink } from '../project-links';
 import { pickWebsite } from '../link-utils';
 
 export interface MarketMetrics {
@@ -72,6 +73,7 @@ export async function getTokenInfo(tokenId: string): Promise<{
   website: string;
   github: string;
   contractAddress: string;
+  links: ProjectLink[];
 }> {
   const empty = {
     name: '',
@@ -80,27 +82,39 @@ export async function getTokenInfo(tokenId: string): Promise<{
     website: '',
     github: '',
     contractAddress: '',
+    links: [] as ProjectLink[],
   };
 
   try {
     const response = await cgFetch(
-      `/coins/${encodeURIComponent(tokenId)}?localization=false&tickers=false&market_data=false&community_data=true&developer_data=false`
+      `/coins/${encodeURIComponent(tokenId)}?localization=false&tickers=false&market_data=false&community_data=true&developer_data=true`
     );
     if (!response.ok) return empty;
 
     const data = await response.json();
+    const links = parseCoinGeckoLinks(data.links);
     return {
       name: data.name,
       symbol: data.symbol?.toUpperCase() ?? '',
       description: data.description?.en || '',
-      website: pickWebsite(data.links?.homepage),
+      website: links.find((l) => l.kind === 'website')?.url || pickWebsite(data.links?.homepage),
       github: data.links?.repos_url?.github?.[0] || '',
       contractAddress: data.platforms?.ethereum || '',
+      links,
     };
   } catch (error) {
     console.error('CoinGecko token info error:', error);
     return empty;
   }
+}
+
+export async function getProjectLinksByContract(
+  contractAddress: string
+): Promise<ProjectLink[]> {
+  const resolved = await resolveCoinByContract(contractAddress);
+  if (!resolved) return [];
+  const info = await getTokenInfo(resolved.id);
+  return info.links;
 }
 
 export async function checkExchangeListing(tokenId: string): Promise<{

@@ -167,24 +167,26 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
                   <X size={14} />
                 </button>
               </div>
-              {(analyzeResult.intelligence.token?.website ||
-                analyzeResult.intelligence.social?.website) && (
-                <div className="flex flex-wrap gap-3">
-                  {analyzeResult.intelligence.token?.website && (
-                    <a
-                      href={analyzeResult.intelligence.token.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-[var(--color-accent)] hover:underline"
-                    >
-                      Website ↗
-                    </a>
-                  )}
-                </div>
-              )}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {analyzeResult.intelligence.social &&
+                analyzeResult.intelligence.social.links.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {analyzeResult.intelligence.social.links.slice(0, 6).map((link) => (
+                      <a
+                        key={link.url}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-[var(--color-accent)] hover:underline"
+                      >
+                        {link.label} ↗
+                      </a>
+                    ))}
+                  </div>
+                )}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 {[
                   { k: 'Rug risk', v: analyzeResult.scores.rugRiskScore },
+                  { k: 'Social', v: analyzeResult.scores.socialRiskScore },
                   { k: 'Legitimacy', v: analyzeResult.scores.legitimacyScore },
                   { k: 'Innovation', v: analyzeResult.scores.innovationScore },
                   { k: 'Survival', v: analyzeResult.scores.survivalProbability, s: '%' },

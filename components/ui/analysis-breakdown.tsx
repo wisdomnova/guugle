@@ -9,6 +9,7 @@ import {
   Shield,
   TrendingDown,
   TrendingUp,
+  Users,
 } from 'lucide-react';
 import type { FullAnalysisResult } from '@/lib/analysis';
 import { formatPct, formatUsd } from '@/lib/analysis';
@@ -35,22 +36,25 @@ export function AnalysisBreakdown({ result }: AnalysisBreakdownProps) {
         ))}
       </div>
 
-      {(intel.token?.website || intel.social?.website) && (
+      {intel.social && intel.social.links.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          <a
-            href={intel.token?.website || intel.social?.website || '#'}
+          {intel.social.links.map((link) => (
+            <a
+              key={link.url}
+              href={link.url}
               target="_blank"
               rel="noopener noreferrer"
               className="badge badge-muted text-xs inline-flex items-center gap-1 hover:border-[var(--color-accent)]"
             >
               <Globe size={12} />
-              Website
+              {link.label}
               <ExternalLink size={10} />
             </a>
+          ))}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
         {intel.market && (
           <IntelCard title="Market" icon={TrendingUp} accent="var(--color-accent)">
             <MetricRow label="Price" value={formatUsd(intel.market.tokenPrice)} />
@@ -155,11 +159,47 @@ export function AnalysisBreakdown({ result }: AnalysisBreakdownProps) {
         ) : (
           <IntelCard title="GitHub" icon={Code2} accent="var(--color-text-muted)">
             <p className="text-xs text-[var(--color-text-muted)]">
-              No linked public repo found. Set GITHUB_TOKEN for higher API limits.
+              No linked public repo found.
             </p>
           </IntelCard>
         )}
 
+        {intel.social && (
+          <IntelCard title="Social risk" icon={Users} accent="#1d9bf0">
+            <MetricRow
+              label="Social risk"
+              value={String(result.scores.socialRiskScore)}
+              highlight={
+                result.scores.socialRiskScore >= 60
+                  ? 'var(--color-danger)'
+                  : result.scores.socialRiskScore >= 35
+                    ? 'var(--color-warning)'
+                    : 'var(--color-success)'
+              }
+            />
+            <MetricRow label="X presence" value={String(intel.social.xPresenceIndex)} />
+            <MetricRow label="Web visibility" value={String(intel.social.webVisibilityIndex)} />
+            <MetricRow label="Channels" value={String(intel.social.links.length)} />
+            {intel.social.signals.slice(0, 3).map((s) => (
+              <p
+                key={s.signal}
+                className="text-[10px] text-[var(--color-text-secondary)] leading-snug border-l-2 border-[var(--color-border)] pl-2"
+              >
+                <span
+                  className={
+                    s.severity === 'high'
+                      ? 'text-[var(--color-danger)]'
+                      : s.severity === 'medium'
+                        ? 'text-[var(--color-warning)]'
+                        : 'text-[var(--color-success)]'
+                  }
+                >
+                  {s.signal}
+                </span>
+              </p>
+            ))}
+          </IntelCard>
+        )}
       </div>
 
       {(result.redFlags.length > 0 || result.positiveSignals.length > 0) && (

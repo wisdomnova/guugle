@@ -13,3 +13,23 @@ export function pickWebsite(homepages: unknown): string {
   }
   return '';
 }
+
+export function pickTwitterHandle(links: Record<string, unknown> | undefined): string {
+  if (!links) return '';
+  const raw =
+    links.twitter_screen_name ??
+    links.twitter_screen_handle ??
+    links.twitter_username;
+  if (typeof raw !== 'string') return '';
+  return raw.trim().replace(/^@/, '');
+}
+
+export function twitterProfileUrl(handle: string): string {
+  const h = handle.replace(/^@/, '').trim();
+  return h ? `https://x.com/${h}` : '';
+}
+
+export function telegramUrl(id: string): string {
+  const t = id.trim().replace(/^@/, '').replace(/^https?:\/\/(t\.me|telegram\.me)\//i, '');
+  return t ? `https://t.me/${t}` : '';
+}

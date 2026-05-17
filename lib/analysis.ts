@@ -8,7 +8,9 @@ import {
   getTokenInfo,
   checkExchangeListing,
   resolveCoinByContract,
+  getProjectLinksByContract,
 } from './integrations/coingecko';
+import type { ProjectLink } from './project-links';
 import { getDexTokenData, type DexPairMetrics } from './integrations/dexscreener';
 import { resolveDisplayName } from './token-display';
 import {
@@ -20,7 +22,7 @@ import {
   type CodeQualitySignals,
 } from './integrations/github';
 import { scoreFromGathered, type ScoringInputs, type ScoringResults } from './scoring';
-import { buildWebPresenceSnapshot, type SocialSnapshot } from './social-intelligence';
+import { buildSocialIntelligence, type SocialSnapshot } from './social-intelligence';
 import { normalizeUrl } from './link-utils';
 
 export interface OnChainSnapshot {
@@ -91,6 +93,7 @@ export interface FullAnalysisResult {
     innovationScore: number;
     survivalProbability: number;
     githubActivity: number;
+    socialRiskScore: number;
   };
   redFlags: ScoringResults['redFlags'];
   positiveSignals: ScoringResults['positiveSignals'];
@@ -246,7 +249,20 @@ export async function gatherProjectIntelligence(inputs: {
 
   if (token) sourcesUsed.push(tokenInfo ? 'CoinGecko metadata' : 'DexScreener metadata');
 
-  const social = buildWebPresenceSnapshot(token?.website);
+  let projectLinks: ProjectLink[] = tokenInfo?.links ?? [];
+  if (projectLinks.length === 0 && inputs.contractAddress) {
+    projectLinks = await getProjectLinksByContract(inputs.contractAddress);
+  }
+
+  const social = buildSocialIntelligence({
+    contractAddress: inputs.contractAddress,
+    coingeckoId,
+    tokenName: token?.name ?? inputs.name,
+    marketCap: market?.marketCap,
+    links: projectLinks,
+  });
+
+  if (social.links.length > 0) sourcesUsed.push('CoinGecko project links');
   if (social.website) sourcesUsed.push('Project website');
 
   return { market, onChain, dex, github, social, token, sourcesUsed, sourcesMissing };
@@ -304,6 +320,13 @@ export async function runFullAnalysis(params: {
         evidence: s.evidence,
       })) ?? [];
 
+  const legitimacyScore = Math.min(
+    100,
+    scores.legitimacyScore +
+      (social && social.webVisibilityIndex >= 50 ? 4 : 0) +
+      (social && social.xPresenceIndex >= 55 ? 3 : 0)
+  );
+
   return {
     name: displayName,
     contractAddress: params.contractAddress ?? null,
@@ -311,10 +334,11 @@ export async function runFullAnalysis(params: {
     chain: params.chain,
     scores: {
       rugRiskScore: scores.rugRiskScore,
-      legitimacyScore: scores.legitimacyScore,
+      legitimacyScore,
       innovationScore: scores.innovationScore,
       survivalProbability: scores.survivalProbability,
       githubActivity: intelligence.github?.activityScore ?? 0,
+      socialRiskScore: social?.socialRiskScore ?? 50,
     },
     redFlags: [...scores.redFlags, ...socialRedFlags],
     positiveSignals: [...scores.positiveSignals, ...socialPositives],

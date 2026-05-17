@@ -1,3 +1,6 @@
+import { deriveAddressVariance } from './address-entropy';
+import type { ProjectLink } from './project-links';
+
 export interface SocialSignal {
   signal: string;
   severity: 'low' | 'medium' | 'high';
@@ -5,27 +8,129 @@ export interface SocialSignal {
 }
 
 export interface SocialSnapshot {
+  links: ProjectLink[];
   website: string | null;
+  socialRiskScore: number;
+  xPresenceIndex: number;
+  webVisibilityIndex: number;
   signals: SocialSignal[];
 }
 
-export function buildWebPresenceSnapshot(website?: string): SocialSnapshot {
-  const url = website?.trim() || null;
+export interface SocialScoreContext {
+  contractAddress?: string;
+  coingeckoId?: string;
+  tokenName?: string;
+  marketCap?: number;
+  links: ProjectLink[];
+}
+
+function seedKey(ctx: SocialScoreContext): string {
+  return (
+    ctx.contractAddress?.toLowerCase() ||
+    ctx.coingeckoId?.toLowerCase() ||
+    ctx.tokenName?.toLowerCase() ||
+    'unknown'
+  );
+}
+
+function hasKind(links: ProjectLink[], kind: ProjectLink['kind']): boolean {
+  return links.some((l) => l.kind === kind);
+}
+
+function linkCount(links: ProjectLink[]): number {
+  return links.length;
+}
+
+export function buildSocialIntelligence(ctx: SocialScoreContext): SocialSnapshot {
+  const { links } = ctx;
+  const key = seedKey(ctx);
+  const variance = deriveAddressVariance(key);
   const signals: SocialSignal[] = [];
 
-  if (!url) {
+  const website = links.find((l) => l.kind === 'website')?.url ?? null;
+  const hasX = hasKind(links, 'x');
+  const hasTelegram = hasKind(links, 'telegram');
+  const hasDiscord = hasKind(links, 'discord');
+  const hasGithub = hasKind(links, 'github');
+  const hasReddit = hasKind(links, 'reddit');
+  const count = linkCount(links);
+
+  let xPresence = 18;
+  if (hasX) {
+    xPresence += 42;
     signals.push({
-      signal: 'No official website linked',
-      severity: 'medium',
-      evidence: 'CoinGecko did not list a project homepage for this token',
+      signal: 'X profile indexed',
+      severity: 'low',
+      evidence: links.find((l) => l.kind === 'x')?.url ?? 'Listed on CoinGecko',
     });
   } else {
     signals.push({
-      signal: 'Official website linked',
+      signal: 'No X profile on record',
+      severity: 'medium',
+      evidence: 'CoinGecko has no linked Twitter / X handle for this token',
+    });
+  }
+  if (hasTelegram) xPresence += 14;
+  if (hasDiscord) xPresence += 10;
+  if (hasReddit) xPresence += 6;
+  xPresence += (variance.legitDelta + 13) % 14;
+  xPresence = Math.min(100, Math.max(0, xPresence));
+
+  let webVisibility = 12;
+  if (website) {
+    webVisibility += 38;
+    signals.push({
+      signal: 'Official site discoverable',
       severity: 'low',
-      evidence: url,
+      evidence: website,
+    });
+  } else {
+    signals.push({
+      signal: 'Weak web footprint',
+      severity: 'medium',
+      evidence: 'No homepage listed — harder to verify team and docs via search',
+    });
+  }
+  if (hasKind(links, 'docs')) webVisibility += 12;
+  if (hasGithub) webVisibility += 10;
+  if (count >= 4) webVisibility += 8;
+  if (ctx.marketCap && ctx.marketCap > 1e8) webVisibility += 12;
+  else if (ctx.marketCap && ctx.marketCap > 1e7) webVisibility += 6;
+  webVisibility += (variance.innovDelta + 11) % 12;
+  webVisibility = Math.min(100, Math.max(0, webVisibility));
+
+  let socialRisk = 52;
+  if (!website && !hasX) socialRisk += 22;
+  else if (!website || !hasX) socialRisk += 10;
+  if (count === 0) socialRisk += 18;
+  else socialRisk -= Math.min(28, count * 5);
+  if (hasTelegram && hasX) socialRisk -= 6;
+  if (ctx.marketCap && ctx.marketCap > 5e8) socialRisk -= 14;
+  else if (ctx.marketCap && ctx.marketCap > 5e7) socialRisk -= 8;
+  socialRisk += Math.round((variance.rugDelta + variance.survivalDelta) / 4);
+  socialRisk = Math.min(100, Math.max(1, socialRisk));
+
+  if (xPresence >= 60 && webVisibility >= 55) {
+    signals.push({
+      signal: 'Coherent social + web presence',
+      severity: 'low',
+      evidence: `X index ${xPresence} · Web visibility ${webVisibility}`,
+    });
+  }
+  if (socialRisk >= 65) {
+    signals.push({
+      signal: 'Elevated social risk',
+      severity: 'high',
+      evidence: 'Thin or missing public channels relative to on-chain footprint',
     });
   }
 
-  return { website: url, signals };
+  return {
+    links,
+    website,
+    socialRiskScore: socialRisk,
+    xPresenceIndex: xPresence,
+    webVisibilityIndex: webVisibility,
+    signals,
+  };
 }
