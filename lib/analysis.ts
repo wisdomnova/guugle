@@ -161,7 +161,8 @@ export async function gatherProjectIntelligence(inputs: {
         contractLinks = resolved.links;
       }
     } else {
-      contractLinks = await getProjectLinksByContract(inputs.contractAddress);
+      const info = await getTokenInfo(coingeckoId);
+      contractLinks = info.links;
     }
   }
 
@@ -258,7 +259,7 @@ export async function gatherProjectIntelligence(inputs: {
 
   let projectLinks = mergeProjectLinks(tokenInfo?.links ?? [], contractLinks);
   if (inputs.contractAddress && !projectLinks.some((l) => l.kind === 'x')) {
-    const extra = await getProjectLinksByContract(inputs.contractAddress);
+    const extra = await getProjectLinksByContract(inputs.contractAddress, coingeckoId);
     projectLinks = mergeProjectLinks(projectLinks, extra);
   }
 

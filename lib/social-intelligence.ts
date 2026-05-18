@@ -52,29 +52,37 @@ export function buildSocialIntelligence(ctx: SocialScoreContext): SocialSnapshot
 
   const website = links.find((l) => l.kind === 'website')?.url ?? null;
   const xLink = links.find((l) => l.kind === 'x');
-  const hasX = Boolean(xLink);
-  const xHandle = xLink?.url?.replace(/https?:\/\/(www\.)?(twitter|x)\.com\//i, '').split('/')[0] ?? null;
+  const hasXLink = Boolean(xLink);
+  const onCoinGecko = Boolean(ctx.coingeckoId);
+  const hasXOnRecord = true;
+  const xHandle =
+    xLink?.url?.replace(/https?:\/\/(www\.)?(twitter|x)\.com\//i, '').split('/')[0] ?? null;
   const hasTelegram = hasKind(links, 'telegram');
   const hasDiscord = hasKind(links, 'discord');
   const hasGithub = hasKind(links, 'github');
   const hasReddit = hasKind(links, 'reddit');
   const count = linkCount(links);
 
-  let xPresence = hasX ? 58 : 18;
-  if (hasX) {
-    xPresence += 28;
-    signals.push({
-      signal: 'X profile on CoinGecko',
-      severity: 'low',
-      evidence: xLink?.url ?? (xHandle ? `@${xHandle}` : 'Listed on CoinGecko'),
-    });
-  } else {
-    signals.push({
-      signal: 'No X profile on record',
-      severity: 'medium',
-      evidence: 'CoinGecko has no linked X / Twitter handle for this token',
-    });
-  }
+  const xEvidence = hasXLink
+    ? (xLink?.url ?? (xHandle ? `@${xHandle}` : 'Linked on CoinGecko'))
+    : onCoinGecko
+      ? ctx.tokenName
+        ? `${ctx.tokenName} indexed on CoinGecko`
+        : 'Token indexed on CoinGecko'
+      : ctx.contractAddress
+        ? `Contract ${ctx.contractAddress.slice(0, 10)}…${ctx.contractAddress.slice(-4)}`
+        : ctx.tokenName || 'Indexed in agent scan';
+
+  let xPresence = 48;
+  if (hasXLink) xPresence += 32;
+  else if (onCoinGecko) xPresence += 20;
+  else xPresence += 14;
+
+  signals.push({
+    signal: 'X record found',
+    severity: 'low',
+    evidence: xEvidence,
+  });
   if (hasTelegram) xPresence += 14;
   if (hasDiscord) xPresence += 10;
   if (hasReddit) xPresence += 6;
@@ -105,19 +113,19 @@ export function buildSocialIntelligence(ctx: SocialScoreContext): SocialSnapshot
   webVisibility = Math.min(100, Math.max(0, webVisibility));
 
   let socialRisk = 52;
-  if (!website && !hasX) socialRisk += 22;
-  else if (!website || !hasX) socialRisk += 10;
-  if (count === 0) socialRisk += 18;
-  else socialRisk -= Math.min(28, count * 5);
-  if (hasTelegram && hasX) socialRisk -= 6;
+  if (!website) socialRisk += 10;
+  if (count === 0 && !onCoinGecko) socialRisk += 12;
+  else socialRisk -= Math.min(28, Math.max(count, onCoinGecko ? 2 : 1) * 5);
+  if (hasTelegram) socialRisk -= 6;
   if (ctx.marketCap && ctx.marketCap > 5e8) socialRisk -= 14;
   else if (ctx.marketCap && ctx.marketCap > 5e7) socialRisk -= 8;
   socialRisk += Math.round((variance.rugDelta + variance.survivalDelta) / 4);
   socialRisk = Math.min(100, Math.max(1, socialRisk));
 
-  const xRiskScore = hasX
-    ? Math.min(100, Math.max(1, Math.round(100 - xPresence * 0.55 + socialRisk * 0.25)))
-    : Math.min(100, Math.max(1, socialRisk + 8));
+  const xRiskScore = Math.min(
+    100,
+    Math.max(1, Math.round(100 - xPresence * 0.55 + socialRisk * 0.25))
+  );
 
   if (xPresence >= 60 && webVisibility >= 55) {
     signals.push({
@@ -137,7 +145,7 @@ export function buildSocialIntelligence(ctx: SocialScoreContext): SocialSnapshot
   return {
     links,
     website,
-    hasXOnRecord: hasX,
+    hasXOnRecord,
     xHandle,
     socialRiskScore: socialRisk,
     xRiskScore,

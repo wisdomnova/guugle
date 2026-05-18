@@ -3,7 +3,7 @@
  */
 
 import { cgFetch } from '../coingecko-client';
-import { parseCoinGeckoLinks, type ProjectLink } from '../project-links';
+import { mergeProjectLinks, parseCoinGeckoLinks, type ProjectLink } from '../project-links';
 import { pickWebsite } from '../link-utils';
 
 export interface MarketMetrics {
@@ -112,12 +112,21 @@ export async function getTokenInfo(tokenId: string): Promise<{
 }
 
 export async function getProjectLinksByContract(
-  contractAddress: string
+  contractAddress: string,
+  coingeckoId?: string
 ): Promise<ProjectLink[]> {
+  if (coingeckoId) {
+    const byId = await getTokenInfo(coingeckoId);
+    if (byId.links.length > 0) return byId.links;
+  }
+
   const resolved = await resolveCoinByContract(contractAddress);
-  if (!resolved) return [];
+  if (!resolved) {
+    return coingeckoId ? (await getTokenInfo(coingeckoId)).links : [];
+  }
+
   const info = await getTokenInfo(resolved.id);
-  return info.links;
+  return mergeProjectLinks(resolved.links, info.links);
 }
 
 export async function checkExchangeListing(tokenId: string): Promise<{
