@@ -165,7 +165,29 @@ export function AnalysisBreakdown({ result }: AnalysisBreakdownProps) {
         )}
 
         {intel.social && (
-          <IntelCard title="Social risk" icon={Users} accent="#1d9bf0">
+          <IntelCard
+            title={intel.social.hasXOnRecord ? 'X & social' : 'Social risk'}
+            icon={Users}
+            accent="#1d9bf0"
+          >
+            {intel.social.hasXOnRecord && (
+              <>
+                <MetricRow
+                  label="X risk"
+                  value={String(result.scores.xRiskScore)}
+                  highlight={
+                    result.scores.xRiskScore >= 60
+                      ? 'var(--color-danger)'
+                      : result.scores.xRiskScore >= 35
+                        ? 'var(--color-warning)'
+                        : 'var(--color-success)'
+                  }
+                />
+                {intel.social.xHandle && (
+                  <MetricRow label="X handle" value={`@${intel.social.xHandle}`} />
+                )}
+              </>
+            )}
             <MetricRow
               label="Social risk"
               value={String(result.scores.socialRiskScore)}

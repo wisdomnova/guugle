@@ -10,7 +10,10 @@ export interface SocialSignal {
 export interface SocialSnapshot {
   links: ProjectLink[];
   website: string | null;
+  hasXOnRecord: boolean;
+  xHandle: string | null;
   socialRiskScore: number;
+  xRiskScore: number;
   xPresenceIndex: number;
   webVisibilityIndex: number;
   signals: SocialSignal[];
@@ -48,26 +51,28 @@ export function buildSocialIntelligence(ctx: SocialScoreContext): SocialSnapshot
   const signals: SocialSignal[] = [];
 
   const website = links.find((l) => l.kind === 'website')?.url ?? null;
-  const hasX = hasKind(links, 'x');
+  const xLink = links.find((l) => l.kind === 'x');
+  const hasX = Boolean(xLink);
+  const xHandle = xLink?.url?.replace(/https?:\/\/(www\.)?(twitter|x)\.com\//i, '').split('/')[0] ?? null;
   const hasTelegram = hasKind(links, 'telegram');
   const hasDiscord = hasKind(links, 'discord');
   const hasGithub = hasKind(links, 'github');
   const hasReddit = hasKind(links, 'reddit');
   const count = linkCount(links);
 
-  let xPresence = 18;
+  let xPresence = hasX ? 58 : 18;
   if (hasX) {
-    xPresence += 42;
+    xPresence += 28;
     signals.push({
-      signal: 'X profile indexed',
+      signal: 'X profile on CoinGecko',
       severity: 'low',
-      evidence: links.find((l) => l.kind === 'x')?.url ?? 'Listed on CoinGecko',
+      evidence: xLink?.url ?? (xHandle ? `@${xHandle}` : 'Listed on CoinGecko'),
     });
   } else {
     signals.push({
       signal: 'No X profile on record',
       severity: 'medium',
-      evidence: 'CoinGecko has no linked Twitter / X handle for this token',
+      evidence: 'CoinGecko has no linked X / Twitter handle for this token',
     });
   }
   if (hasTelegram) xPresence += 14;
@@ -110,6 +115,10 @@ export function buildSocialIntelligence(ctx: SocialScoreContext): SocialSnapshot
   socialRisk += Math.round((variance.rugDelta + variance.survivalDelta) / 4);
   socialRisk = Math.min(100, Math.max(1, socialRisk));
 
+  const xRiskScore = hasX
+    ? Math.min(100, Math.max(1, Math.round(100 - xPresence * 0.55 + socialRisk * 0.25)))
+    : Math.min(100, Math.max(1, socialRisk + 8));
+
   if (xPresence >= 60 && webVisibility >= 55) {
     signals.push({
       signal: 'Coherent social + web presence',
@@ -128,7 +137,10 @@ export function buildSocialIntelligence(ctx: SocialScoreContext): SocialSnapshot
   return {
     links,
     website,
+    hasXOnRecord: hasX,
+    xHandle,
     socialRiskScore: socialRisk,
+    xRiskScore,
     xPresenceIndex: xPresence,
     webVisibilityIndex: webVisibility,
     signals,

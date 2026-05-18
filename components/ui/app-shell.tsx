@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { Hexagon } from 'lucide-react';
+import { SettingsDrawer } from './settings-drawer';
 
 interface AppShellProps {
   children: ReactNode;
@@ -25,11 +26,12 @@ export function AppShell({ children }: AppShellProps) {
               </span>
             </div>
           </div>
-          <nav className="hidden sm:flex items-center gap-1">
-            <span className="badge badge-muted">
+          <nav className="flex items-center gap-2">
+            <span className="hidden sm:inline-flex badge badge-muted">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)] animate-pulse" />
               Live
             </span>
+            <SettingsDrawer />
           </nav>
         </div>
       </header>

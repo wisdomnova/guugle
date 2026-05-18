@@ -48,18 +48,21 @@ export async function resolveCoinByContract(
   symbol: string;
   github?: string;
   website?: string;
+  links: ProjectLink[];
 } | null> {
   try {
     const res = await cgFetch(`/coins/ethereum/contract/${contractAddress.toLowerCase()}`);
     if (!res.ok) return null;
     const data = await res.json();
     if (!data?.id) return null;
+    const links = parseCoinGeckoLinks(data.links);
     return {
       id: data.id,
       name: data.name,
       symbol: (data.symbol || '').toUpperCase(),
       github: data.links?.repos_url?.github?.[0],
-      website: pickWebsite(data.links?.homepage),
+      website: links.find((l) => l.kind === 'website')?.url || pickWebsite(data.links?.homepage),
+      links,
     };
   } catch {
     return null;

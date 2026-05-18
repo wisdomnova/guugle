@@ -93,3 +93,13 @@ export function parseCoinGeckoLinks(links: Record<string, unknown> | undefined):
 
   return out;
 }
+
+export function mergeProjectLinks(...groups: ProjectLink[][]): ProjectLink[] {
+  const out: ProjectLink[] = [];
+  for (const group of groups) {
+    for (const link of group) {
+      pushUnique(out, link);
+    }
+  }
+  return out;
+}

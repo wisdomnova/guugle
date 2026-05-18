@@ -16,6 +16,7 @@ import { ProjectIntelligenceCard, ProjectIntelligence } from './project-intellig
 import { AnalysisBreakdown } from './analysis-breakdown';
 import type { FullAnalysisResult } from '@/lib/analysis';
 import { cn } from '@/lib/utils';
+import { isEthAddress } from '@/lib/token-display';
 
 interface DiscoveryDashboardProps {
   projects: ProjectIntelligence[];
@@ -45,6 +46,10 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
   const handleAnalyze = async () => {
     const input = analyzeInput.trim();
     if (!input) return;
+    if (!isEthAddress(input)) {
+      setAnalyzeError('Enter a valid Ethereum contract address (0x…, 42 characters). Names and symbols are not supported.');
+      return;
+    }
     setAnalyzing(true);
     setAnalyzeResult(null);
     setAnalyzeError(null);
@@ -114,7 +119,7 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
               Paste any contract. Get a unique risk profile.
             </h1>
             <p className="text-body text-sm">
-              Live pulls from DexScreener, Etherscan, CoinGecko, and GitHub — scores are computed per address.
+              Ethereum contract addresses only. Live pulls from DexScreener, Etherscan, CoinGecko, and GitHub.
             </p>
           </div>
         </div>
@@ -122,7 +127,7 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
-            placeholder="0x… contract address or token name"
+            placeholder="0x… Ethereum contract address"
             value={analyzeInput}
             onChange={(e) => setAnalyzeInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
@@ -186,7 +191,12 @@ export function DiscoveryDashboard({ projects, onProjectSelect, isLoading, onRef
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 {[
                   { k: 'Rug risk', v: analyzeResult.scores.rugRiskScore },
-                  { k: 'Social', v: analyzeResult.scores.socialRiskScore },
+                  {
+                    k: analyzeResult.intelligence.social?.hasXOnRecord ? 'X risk' : 'Social',
+                    v: analyzeResult.intelligence.social?.hasXOnRecord
+                      ? analyzeResult.scores.xRiskScore
+                      : analyzeResult.scores.socialRiskScore,
+                  },
                   { k: 'Legitimacy', v: analyzeResult.scores.legitimacyScore },
                   { k: 'Innovation', v: analyzeResult.scores.innovationScore },
                   { k: 'Survival', v: analyzeResult.scores.survivalProbability, s: '%' },

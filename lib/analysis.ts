@@ -10,7 +10,7 @@ import {
   resolveCoinByContract,
   getProjectLinksByContract,
 } from './integrations/coingecko';
-import type { ProjectLink } from './project-links';
+import { mergeProjectLinks, type ProjectLink } from './project-links';
 import { getDexTokenData, type DexPairMetrics } from './integrations/dexscreener';
 import { resolveDisplayName } from './token-display';
 import {
@@ -94,6 +94,7 @@ export interface FullAnalysisResult {
     survivalProbability: number;
     githubActivity: number;
     socialRiskScore: number;
+    xRiskScore: number;
   };
   redFlags: ScoringResults['redFlags'];
   positiveSignals: ScoringResults['positiveSignals'];
@@ -148,13 +149,19 @@ export async function gatherProjectIntelligence(inputs: {
   let githubRepo = inputs.githubRepo;
 
   let linkHints: { website?: string } = {};
+  let contractLinks: ProjectLink[] = [];
 
-  if (inputs.contractAddress && !coingeckoId) {
-    const resolved = await resolveCoinByContract(inputs.contractAddress);
-    if (resolved) {
-      coingeckoId = resolved.id;
-      if (!githubRepo && resolved.github) githubRepo = resolved.github;
-      linkHints = { website: resolved.website };
+  if (inputs.contractAddress) {
+    if (!coingeckoId) {
+      const resolved = await resolveCoinByContract(inputs.contractAddress);
+      if (resolved) {
+        coingeckoId = resolved.id;
+        if (!githubRepo && resolved.github) githubRepo = resolved.github;
+        linkHints = { website: resolved.website };
+        contractLinks = resolved.links;
+      }
+    } else {
+      contractLinks = await getProjectLinksByContract(inputs.contractAddress);
     }
   }
 
@@ -249,9 +256,10 @@ export async function gatherProjectIntelligence(inputs: {
 
   if (token) sourcesUsed.push(tokenInfo ? 'CoinGecko metadata' : 'DexScreener metadata');
 
-  let projectLinks: ProjectLink[] = tokenInfo?.links ?? [];
-  if (projectLinks.length === 0 && inputs.contractAddress) {
-    projectLinks = await getProjectLinksByContract(inputs.contractAddress);
+  let projectLinks = mergeProjectLinks(tokenInfo?.links ?? [], contractLinks);
+  if (inputs.contractAddress && !projectLinks.some((l) => l.kind === 'x')) {
+    const extra = await getProjectLinksByContract(inputs.contractAddress);
+    projectLinks = mergeProjectLinks(projectLinks, extra);
   }
 
   const social = buildSocialIntelligence({
@@ -339,6 +347,7 @@ export async function runFullAnalysis(params: {
       survivalProbability: scores.survivalProbability,
       githubActivity: intelligence.github?.activityScore ?? 0,
       socialRiskScore: social?.socialRiskScore ?? 50,
+      xRiskScore: social?.xRiskScore ?? social?.socialRiskScore ?? 50,
     },
     redFlags: [...scores.redFlags, ...socialRedFlags],
     positiveSignals: [...scores.positiveSignals, ...socialPositives],
